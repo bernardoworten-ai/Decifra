@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 
-from . import ai, db
+from . import ai, cache, db
 from .config import Settings
 from .resolution import resolve_product
 from .sources import build_connectors
@@ -98,6 +98,7 @@ def feed_batch(settings: Settings | None = None, limit: int | None = None) -> Ru
         source_id = db.ensure_source(conn, awin.name, awin.kind, awin.base_url, awin.trust_weight)
         run_id = db.start_run(conn, source_id, "feed_batch")
         seen = matched = 0
+        touched: set[str] = set()
         for ean, offer, _row in awin.stream_rows(limit=limit):
             seen += 1
             if not ean:
@@ -107,7 +108,11 @@ def feed_batch(settings: Settings | None = None, limit: int | None = None) -> Ru
                 continue
             store_id = db.ensure_store(conn, offer.store_name, network="awin")
             db.upsert_offer(conn, product_id, store_id, source_id, offer)
+            touched.add(product_id)
             matched += 1
+        # Invalida a cache dos produtos cujas ofertas mudaram (preço fresco no lookup).
+        for slug in db.slugs_for(conn, list(touched)):
+            cache.invalidate_product(slug)
         db.finish_run(conn, run_id, "ok", matched, f"{seen} linhas, {matched} ofertas casadas.")
         return RunResult("ok", matched, notes=f"{seen} linhas processadas, {matched} ofertas atualizadas.")
     finally:
@@ -286,10 +291,12 @@ def score_recompute_month(
     try:
         run_id = db.start_run(conn, None, "score_recompute")
         total = 0
+        touched_slugs: set[str] = set()
         for cat_id, _cat_name, _cat_slug in db.categories_with_rankings(conn):
             products = [
                 {
                     "id": str(pid),
+                    "slug": slug,
                     "name": name,
                     "brand": brand,
                     "overall": to_f(overall),
@@ -297,7 +304,7 @@ def score_recompute_month(
                     "users": to_f(users),
                     "price": to_f(price),
                 }
-                for (pid, name, brand, overall, material, users, price) in db.products_for_ranking(
+                for (pid, name, brand, overall, material, users, price, slug) in db.products_for_ranking(
                     conn, cat_id
                 )
             ]
@@ -311,7 +318,11 @@ def score_recompute_month(
                         ai.rank_rationale(prod["name"], label, metric_text, rank) if use_ai else None
                     ) or metric_text
                     db.insert_ranking_item(conn, ranking_id, rank, prod["id"], score_at_time, rationale)
+                    touched_slugs.add(prod["slug"])
                     total += 1
+        # Invalida a cache dos produtos ranqueados (posição/score podem ter mudado).
+        for slug in touched_slugs:
+            cache.invalidate_product(slug)
         db.finish_run(conn, run_id, "ok", total, f"rankings {period_key}")
         return RunResult("ok", total, notes=f"{total} itens de ranking gerados ({period_key}).")
     finally:

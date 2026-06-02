@@ -202,13 +202,23 @@ def products_for_ranking(conn: psycopg.Connection, category_id: str) -> list[tup
         """
         SELECT p.id, p.canonical_name, p.brand,
                s.overall, s.sub_material, s.sub_users,
-               (SELECT min(price) FROM offers o WHERE o.product_id = p.id AND o.in_stock = true) AS price
+               (SELECT min(price) FROM offers o WHERE o.product_id = p.id AND o.in_stock = true) AS price,
+               p.slug
         FROM products p
         LEFT JOIN scores s ON s.product_id = p.id
         WHERE p.category_id = %s
         """,
         (category_id,),
     ).fetchall()
+
+
+def slugs_for(conn: psycopg.Connection, product_ids: list[str]) -> list[str]:
+    if not product_ids:
+        return []
+    rows = conn.execute(
+        "SELECT slug FROM products WHERE id = ANY(%s)", (product_ids,)
+    ).fetchall()
+    return [r[0] for r in rows]
 
 
 def upsert_ranking(
