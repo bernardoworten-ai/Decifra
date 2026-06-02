@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "DECIFRA — veredicto de confiança",
+  "version": "0.1.0",
+  "description": "Na página de uma loja, mostra o DECIFRA Score, o preço mais baixo e o link da ficha do produto.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "DECIFRA"
+  },
+  "permissions": ["activeTab", "tabs"],
+  "host_permissions": ["http://localhost:3000/*"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

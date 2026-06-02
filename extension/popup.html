@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-PT">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root { color-scheme: light; }
+      body {
+        width: 300px;
+        margin: 0;
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px;
+        background: #fff;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      .logo {
+        width: 24px; height: 24px; border-radius: 6px;
+        background: #4f46e5; color: #fff; font-weight: 700;
+        display: grid; place-items: center; font-size: 13px;
+      }
+      h1 { font-size: 14px; margin: 0; letter-spacing: -0.01em; }
+      .body { padding: 14px; }
+      .detected { font-size: 11px; color: #64748b; margin-bottom: 10px; }
+      .muted { color: #64748b; font-size: 13px; }
+      .score { font-size: 36px; font-weight: 800; line-height: 1; }
+      .score span { font-size: 16px; color: #94a3b8; font-weight: 600; }
+      .name { font-weight: 600; margin-top: 6px; }
+      .price { color: #475569; font-size: 13px; margin-top: 2px; }
+      .cta {
+        display: inline-block; margin-top: 10px; padding: 8px 12px;
+        background: #4f46e5; color: #fff; border-radius: 8px;
+        text-decoration: none; font-size: 13px; font-weight: 600;
+      }
+      form { display: flex; gap: 6px; margin-top: 12px; }
+      input {
+        flex: 1; padding: 7px 9px; border: 1px solid #cbd5e1;
+        border-radius: 8px; font-size: 13px;
+      }
+      button {
+        padding: 7px 10px; border: 0; border-radius: 8px;
+        background: #0f172a; color: #fff; font-size: 13px; cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="logo">D</span>
+      <h1>DECIFRA</h1>
+    </header>
+    <div class="body">
+      <div id="detected" class="detected"></div>
+      <div id="result"><p class="muted">A analisar a página…</p></div>
+      <form id="searchForm">
+        <input id="q" type="search" placeholder="Procurar produto…" />
+        <button type="submit">Ir</button>
+      </form>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
