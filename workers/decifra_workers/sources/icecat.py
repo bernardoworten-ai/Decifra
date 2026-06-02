@@ -1,10 +1,14 @@
-"""Open Icecat — specs por GTIN/EAN.
+"""Open/Full Icecat — specs por GTIN/EAN.
 
-Open Icecat é grátis para o subconjunto aberto; basta um UserName registado.
 Endpoint JSON: https://live.icecat.biz/api?UserName=...&Language=PT&GTIN=...&Content=ALL
+
+A API live exige `UserName`; o conteúdo Full Icecat exige adicionalmente um
+`app_key` (ICECAT_APP_KEY, em "Meu Perfil" no Icecat). Sem app_key só se acede
+ao subconjunto Open Icecat — e produtos fora dele devolvem 403 (tratado como skip).
 """
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 import httpx
@@ -25,18 +29,23 @@ class IcecatConnector(SourceConnector):
     trust_weight = 0.9
     base_url = "https://live.icecat.biz/api"
 
-    def __init__(self, username: str | None = None, language: str = "PT"):
+    def __init__(
+        self, username: str | None = None, app_key: str | None = None, language: str = "PT"
+    ):
         self.username = username
+        self.app_key = app_key
         self.language = language
+        self._warned_appkey = False
 
     def configured(self) -> bool:
+        # UserName basta para Open Icecat; app_key é necessário para Full Icecat.
         return bool(self.username)
 
     @staticmethod
     def parse(payload: dict[str, Any], fallback_ean: str) -> RawRecord | None:
         data = payload.get("data") or payload
         general = data.get("GeneralInfo") or {}
-        brand = general.get("Brand") or general.get("BrandInfo", {}).get("BrandName")
+        brand = general.get("Brand") or (general.get("BrandInfo") or {}).get("BrandName")
         model = general.get("ProductName") or general.get("Title")
         title = general.get("Title") or " ".join(filter(None, [brand, model]))
 
@@ -45,7 +54,8 @@ class IcecatConnector(SourceConnector):
             image = data["Image"].get("HighPic") or data["Image"].get("Pic")
 
         specs: list[NormalizedSpec] = []
-        for group in data.get("FeaturesGroups") or []:
+        # A API já usou "FeaturesGroups" e "FeatureGroups" — toleramos ambos.
+        for group in data.get("FeaturesGroups") or data.get("FeatureGroups") or []:
             for feature in group.get("Features") or []:
                 fname = (feature.get("Feature") or {}).get("Name", {})
                 label = fname.get("Value") if isinstance(fname, dict) else str(fname)
@@ -59,15 +69,21 @@ class IcecatConnector(SourceConnector):
                     value_num = float(str(feature.get("RawValue") or "").replace(",", "."))
                 except (TypeError, ValueError):
                     pass
+                measure = feature.get("Measure") or {}
                 specs.append(
                     NormalizedSpec(
                         key=slugify(label),
                         value_text=str(raw_value),
                         value_num=value_num,
-                        unit=(feature.get("Measure") or {}).get("Sign") or None,
+                        unit=(measure.get("Sign") if isinstance(measure, dict) else None) or None,
                         confidence=0.9,
                     )
                 )
+
+        summary = None
+        sd = general.get("SummaryDescription")
+        if isinstance(sd, dict):
+            summary = sd.get("LongSummaryDescription") or sd.get("ShortSummaryDescription")
 
         if not (title or specs):
             return None
@@ -79,9 +95,7 @@ class IcecatConnector(SourceConnector):
             brand=brand,
             model=model,
             image_url=image,
-            summary=general.get("SummaryDescription", {}).get("LongSummaryDescription")
-            if isinstance(general.get("SummaryDescription"), dict)
-            else None,
+            summary=summary,
             specs=specs,
             raw_payload=data,
             match_confidence=0.9,
@@ -96,21 +110,31 @@ class IcecatConnector(SourceConnector):
     def fetch_by_ean(self, ean: str) -> RawRecord | None:
         if not self.configured():
             return None
-        params = {
-            "UserName": self.username,
+        params: dict[str, str] = {
+            "UserName": self.username or "",
             "Language": self.language,
             "GTIN": ean,
             "Content": "ALL",
         }
+        if self.app_key:
+            params["app_key"] = self.app_key
         with httpx.Client(timeout=20) as client:
             resp = client.get(self.base_url, params=params)
-        if resp.status_code in (400, 404):
+        if resp.status_code == 403:
+            # Conteúdo Full Icecat sem app_key — skip gracioso, com aviso único.
+            if not self._warned_appkey:
+                print(
+                    f"[icecat] {ean}: precisa de app_key (Full Icecat). Define ICECAT_APP_KEY. A ignorar.",
+                    file=sys.stderr,
+                )
+                self._warned_appkey = True
             return None
+        if resp.status_code in (400, 404):
+            return None  # GTIN não encontrado no catálogo acessível
         if resp.status_code == 429 or resp.status_code >= 500:
             raise _Retryable(f"icecat {resp.status_code}")
         resp.raise_for_status()
         body = resp.json()
-        # Icecat devolve {"msg": "...", "data": {...}} — sem data ⇒ não encontrado.
         if not body.get("data"):
             return None
         return self.parse(body, ean)

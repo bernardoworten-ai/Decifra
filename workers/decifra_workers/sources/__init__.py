@@ -20,6 +20,6 @@ def build_connectors(settings: Settings) -> list[SourceConnector]:
     """Instancia os connectors a partir da configuração disponível."""
     return [
         UpcItemDbConnector(api_key=settings.go_upc_api_key),
-        IcecatConnector(username=settings.icecat_username),
+        IcecatConnector(username=settings.icecat_username, app_key=settings.icecat_app_key),
         AwinFeedConnector(feed_url=settings.awin_feed_url),
     ]

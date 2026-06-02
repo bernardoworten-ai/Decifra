@@ -16,6 +16,7 @@ class Settings:
     go_upc_api_key: str | None = None
     serpapi_key: str | None = None
     icecat_username: str | None = None
+    icecat_app_key: str | None = None
     awin_feed_url: str | None = None
 
     @classmethod
@@ -29,5 +30,6 @@ class Settings:
             go_upc_api_key=os.environ.get("GO_UPC_API_KEY"),
             serpapi_key=os.environ.get("SERPAPI_KEY"),
             icecat_username=os.environ.get("ICECAT_USERNAME"),
+            icecat_app_key=os.environ.get("ICECAT_APP_KEY"),
             awin_feed_url=os.environ.get("AWIN_FEED_URL"),
         )
