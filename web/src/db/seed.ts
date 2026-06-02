@@ -171,7 +171,7 @@ async function main() {
     canonicalName: "Sony WH-1000XM5",
     summary:
       "Auscultadores over-ear sem fios com cancelamento de ruído de topo, 30 h de autonomia e suporte LDAC. Referência de mercado em ANC e conforto.",
-    ean: "4548736132919",
+    ean: "4548736132917",
     matchConfidence: "0.98",
     specs: [
       spec("tipo", { text: "Over-ear", src: "icecat", conf: 0.95, corr: 3 }),

@@ -58,7 +58,7 @@ def test_icecat_parse():
             ],
         }
     }
-    rec = IcecatConnector.parse(payload, "4548736132919")
+    rec = IcecatConnector.parse(payload, "4548736132917")
     assert rec is not None
     assert rec.brand == "Sony"
     assert rec.image_url == "http://example.com/sony.jpg"

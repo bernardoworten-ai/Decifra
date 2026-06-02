@@ -1,6 +1,6 @@
 /**
  * API pública de lookup para a extensão de browser e integrações.
- *   GET /api/lookup?ean=4548736132919
+ *   GET /api/lookup?ean=4548736132917
  *   GET /api/lookup?q=sony wh-1000xm5
  * CORS aberto (consumida a partir de páginas de lojas).
  */
