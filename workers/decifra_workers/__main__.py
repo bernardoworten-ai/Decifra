@@ -22,12 +22,18 @@ def main(argv: list[str] | None = None) -> int:
     p_feed = sub.add_parser("feed-batch", help="Importa feed Awin (ofertas)")
     p_feed.add_argument("--limit", type=int, default=None, help="Máx. de linhas a processar")
 
+    p_rank = sub.add_parser("score-recompute", help="Gera snapshots de rankings (mês)")
+    p_rank.add_argument("--period", default=None, help="YYYY-MM (default: mês atual)")
+    p_rank.add_argument("--no-ai", action="store_true", help="Não usar IA no rationale")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "ingest-ean":
         res = pipelines.ingest_by_ean(args.ean, dry_run=args.dry_run)
     elif args.cmd == "feed-batch":
         res = pipelines.feed_batch(limit=args.limit)
+    elif args.cmd == "score-recompute":
+        res = pipelines.score_recompute_month(period_key=args.period, use_ai=not args.no_ai)
     else:  # pragma: no cover
         parser.error("comando desconhecido")
 

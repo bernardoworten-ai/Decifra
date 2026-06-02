@@ -9,6 +9,7 @@ Todo o facto persistido leva source_id e confidence; cada execução grava em
 """
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass
 
 from . import ai, db
@@ -119,9 +120,106 @@ def refresh_price_live(product_id: str) -> RunResult:
     raise NotImplementedError("Ligar SerpApi/Bright Data.")
 
 
-def score_recompute_month(period_key: str) -> RunResult:
-    """Cron, dia 10: recalcula `scores` + snapshots `rankings` (mês)."""
-    raise NotImplementedError("Recompute mensal + snapshots de ranking.")
+# Critérios de ranking (cada um é só um ordenamento) → rótulo PT-PT.
+CRITERIA: dict[str, str] = {
+    "overall": "Melhores no geral",
+    "value": "Melhor relação qualidade/preço",
+    "cheapest": "Mais baratos",
+    "premium": "Topo de gama",
+    "material": "Melhor qualidade material",
+    "feedback": "Melhores avaliações de utilizadores",
+}
+
+
+def _rank_for_criterion(
+    products: list[dict], criterion: str
+) -> list[tuple[dict, float, str]]:
+    """Ordena os produtos para um critério → [(produto, score_at_time, dado_texto)]."""
+    out: list[tuple[dict, float, str]] = []
+    if criterion == "overall":
+        cand = sorted(
+            (p for p in products if p["overall"] is not None),
+            key=lambda p: p["overall"],
+            reverse=True,
+        )
+        out = [(p, p["overall"], f"DECIFRA Score {p['overall']:.0f}/100") for p in cand]
+    elif criterion == "value":
+        cand = [p for p in products if p["overall"] is not None and p["price"]]
+        for p in cand:
+            p["_vi"] = round(p["overall"] / p["price"] * 100, 1)
+        cand.sort(key=lambda p: p["_vi"], reverse=True)
+        out = [
+            (p, p["_vi"], f"{p['_vi']:.1f} pontos de score por 100€ (score {p['overall']:.0f}, {p['price']:.0f}€)")
+            for p in cand
+        ]
+    elif criterion == "cheapest":
+        cand = sorted((p for p in products if p["price"]), key=lambda p: p["price"])
+        out = [(p, p["price"], f"{p['price']:.2f}€") for p in cand]
+    elif criterion == "premium":
+        cand = sorted((p for p in products if p["price"]), key=lambda p: p["price"], reverse=True)
+        out = [(p, p["price"], f"{p['price']:.2f}€ (topo de gama)") for p in cand]
+    elif criterion == "material":
+        cand = sorted(
+            (p for p in products if p["material"] is not None),
+            key=lambda p: p["material"],
+            reverse=True,
+        )
+        out = [(p, p["material"], f"Qualidade material {p['material']:.0f}/100") for p in cand]
+    elif criterion == "feedback":
+        cand = sorted(
+            (p for p in products if p["users"] is not None),
+            key=lambda p: p["users"],
+            reverse=True,
+        )
+        out = [(p, p["users"], f"Avaliações de utilizadores {p['users']:.0f}/100") for p in cand]
+    return out
+
+
+def score_recompute_month(
+    period_key: str | None = None, settings: Settings | None = None, use_ai: bool = True
+) -> RunResult:
+    """Gera snapshots `rankings` (mês) para cada categoria com rankings_enabled,
+    em cada critério, com o *porquê* (rationale) gerado por IA (ancorado) + fallback."""
+    settings = settings or Settings.from_env()
+    period_key = period_key or datetime.date.today().strftime("%Y-%m")
+
+    def to_f(v) -> float | None:
+        return float(v) if v is not None else None
+
+    conn = db.connect(settings.database_url)
+    try:
+        run_id = db.start_run(conn, None, "score_recompute")
+        total = 0
+        for cat_id, _cat_name, _cat_slug in db.categories_with_rankings(conn):
+            products = [
+                {
+                    "id": str(pid),
+                    "name": name,
+                    "brand": brand,
+                    "overall": to_f(overall),
+                    "material": to_f(material),
+                    "users": to_f(users),
+                    "price": to_f(price),
+                }
+                for (pid, name, brand, overall, material, users, price) in db.products_for_ranking(
+                    conn, cat_id
+                )
+            ]
+            for criterion, label in CRITERIA.items():
+                top = _rank_for_criterion(products, criterion)[:5]
+                if not top:
+                    continue
+                ranking_id = db.upsert_ranking(conn, cat_id, criterion, "month", period_key)
+                for rank, (prod, score_at_time, metric_text) in enumerate(top, start=1):
+                    rationale = (
+                        ai.rank_rationale(prod["name"], label, metric_text, rank) if use_ai else None
+                    ) or metric_text
+                    db.insert_ranking_item(conn, ranking_id, rank, prod["id"], score_at_time, rationale)
+                    total += 1
+        db.finish_run(conn, run_id, "ok", total, f"rankings {period_key}")
+        return RunResult("ok", total, notes=f"{total} itens de ranking gerados ({period_key}).")
+    finally:
+        conn.close()
 
 
 def score_recompute_year(period_key: str) -> RunResult:

@@ -42,3 +42,16 @@ export function formatRating(value: number | null): string {
   if (value === null) return "—";
   return value.toFixed(1).replace(".", ",");
 }
+
+const MONTHS = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
+
+/** "2026-06" → "junho de 2026"; "2026" → "2026". */
+export function monthLabel(periodKey: string): string {
+  const [year, month] = periodKey.split("-");
+  if (!month) return year;
+  const idx = Number(month) - 1;
+  return MONTHS[idx] ? `${MONTHS[idx]} de ${year}` : periodKey;
+}

@@ -186,3 +186,66 @@ def upsert_offer(
         """,
         (product_id, store_id, offer.price, offer.currency, offer.url_affiliate, offer.in_stock, source_id),
     )
+
+
+# ── Rankings (snapshots por período) ─────────────────────────────────────────
+def categories_with_rankings(conn: psycopg.Connection) -> list[tuple[str, str, str]]:
+    rows = conn.execute(
+        "SELECT id, name, slug FROM categories WHERE rankings_enabled = true ORDER BY name"
+    ).fetchall()
+    return [(str(r[0]), r[1], r[2]) for r in rows]
+
+
+def products_for_ranking(conn: psycopg.Connection, category_id: str) -> list[tuple]:
+    """Produtos da categoria com score e preço mais baixo em stock."""
+    return conn.execute(
+        """
+        SELECT p.id, p.canonical_name, p.brand,
+               s.overall, s.sub_material, s.sub_users,
+               (SELECT min(price) FROM offers o WHERE o.product_id = p.id AND o.in_stock = true) AS price
+        FROM products p
+        LEFT JOIN scores s ON s.product_id = p.id
+        WHERE p.category_id = %s
+        """,
+        (category_id,),
+    ).fetchall()
+
+
+def upsert_ranking(
+    conn: psycopg.Connection, category_id: str, criterion: str, period_type: str, period_key: str
+) -> str:
+    """Cria/recria o snapshot (limpa itens antigos do mesmo período — recompute)."""
+    existing = conn.execute(
+        "SELECT id FROM rankings WHERE category_id=%s AND criterion=%s AND period_type=%s AND period_key=%s",
+        (category_id, criterion, period_type, period_key),
+    ).fetchone()
+    if existing:
+        rid = str(existing[0])
+        conn.execute("DELETE FROM ranking_items WHERE ranking_id = %s", (rid,))
+        conn.execute("UPDATE rankings SET generated_at = now() WHERE id = %s", (rid,))
+        return rid
+    row = conn.execute(
+        """
+        INSERT INTO rankings (category_id, criterion, period_type, period_key)
+        VALUES (%s, %s, %s, %s) RETURNING id
+        """,
+        (category_id, criterion, period_type, period_key),
+    ).fetchone()
+    return str(row[0])
+
+
+def insert_ranking_item(
+    conn: psycopg.Connection,
+    ranking_id: str,
+    rank: int,
+    product_id: str,
+    score_at_time: float,
+    rationale: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO ranking_items (ranking_id, rank, product_id, score_at_time, rationale)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        (ranking_id, rank, product_id, score_at_time, rationale),
+    )

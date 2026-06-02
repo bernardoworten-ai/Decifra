@@ -67,3 +67,33 @@ def summarize_product(record: RawRecord, *, max_specs: int = 12) -> str | None:
         return text or None
     except Exception:
         return None  # IA é best-effort; nunca quebra a ingestão
+
+
+def rank_rationale(
+    product_name: str, criterion_label: str, metric_text: str, rank: int
+) -> str | None:
+    """Frase curta (PT-PT) a explicar a posição do produto no ranking do critério.
+
+    Ancorada no dado fornecido (metric_text). Devolve None se IA indisponível/falhar.
+    """
+    client = _client()
+    if client is None:
+        return None
+    prompt = (
+        "És um redator do DECIFRA, um comparador de produtos. Numa única frase curta "
+        "(português de Portugal, máx. ~18 palavras), explica porque este produto está na "
+        f"posição {rank} deste critério, USANDO apenas o dado fornecido. Se a posição não "
+        "for 1, NÃO digas que é o melhor/maior/mais alto. NÃO inventes números nem opiniões; "
+        "não uses linguagem de marketing.\n\n"
+        f"Produto: {product_name}\nCritério: {criterion_label}\nPosição: {rank}\nDado: {metric_text}"
+    )
+    try:
+        msg = client.messages.create(
+            model=_model(),
+            max_tokens=90,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(block.text for block in msg.content if block.type == "text").strip()
+        return text or None
+    except Exception:
+        return None
