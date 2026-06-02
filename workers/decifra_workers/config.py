@@ -12,9 +12,11 @@ load_dotenv()
 @dataclass(frozen=True)
 class Settings:
     database_url: str
-    anthropic_api_key: str | None
-    go_upc_api_key: str | None
-    serpapi_key: str | None
+    anthropic_api_key: str | None = None
+    go_upc_api_key: str | None = None
+    serpapi_key: str | None = None
+    icecat_username: str | None = None
+    awin_feed_url: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -26,4 +28,6 @@ class Settings:
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY"),
             go_upc_api_key=os.environ.get("GO_UPC_API_KEY"),
             serpapi_key=os.environ.get("SERPAPI_KEY"),
+            icecat_username=os.environ.get("ICECAT_USERNAME"),
+            awin_feed_url=os.environ.get("AWIN_FEED_URL"),
         )
