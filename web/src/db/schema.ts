@@ -253,6 +253,8 @@ export const scoreSignals = pgTable(
     normalized: numeric("normalized"),
     weight: numeric("weight"),
     sourceId: uuid("source_id").references(() => sources.id),
+    sourceUrl: varchar("source_url", { length: 1000 }), // link ao veredicto (nunca o conteúdo)
+    confidence: numeric("confidence"),
     capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("score_signals_product_idx").on(t.productId)],

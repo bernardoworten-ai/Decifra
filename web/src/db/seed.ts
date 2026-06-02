@@ -830,6 +830,9 @@ async function seedProduct(p: {
       normalized: String(p.sub.expert),
       weight: "0.35",
       sourceId: src.rtings,
+      // Veredicto CURADO: guardamos score + link + fonte — nunca o conteúdo (§5).
+      sourceUrl: `https://www.rtings.com/search?q=${encodeURIComponent(p.canonicalName)}`,
+      confidence: "0.9",
     },
     {
       productId,

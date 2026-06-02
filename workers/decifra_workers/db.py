@@ -323,3 +323,144 @@ def set_discriminant(conn: psycopg.Connection, category_id: str, keys: list[str]
             "UPDATE category_attributes SET is_discriminant = true WHERE category_id = %s AND key = ANY(%s)",
             (category_id, keys),
         )
+
+
+# ── DECIFRA Score: recompute a partir de sinais reais ────────────────────────
+def source_id_by_name(conn: psycopg.Connection, name: str) -> str | None:
+    row = conn.execute("SELECT id FROM sources WHERE name = %s", (name,)).fetchone()
+    return str(row[0]) if row else None
+
+
+def products_in_category(conn: psycopg.Connection, category_id: str) -> list[tuple[str, str, str]]:
+    rows = conn.execute(
+        "SELECT id, slug, canonical_name FROM products WHERE category_id = %s", (category_id,)
+    ).fetchall()
+    return [(str(r[0]), r[1], r[2]) for r in rows]
+
+
+def scoring_inputs(conn: psycopg.Connection, product_id: str) -> dict:
+    """Reúne os sinais reais de um produto para o cálculo dos sub-scores."""
+
+    def f(v):
+        return float(v) if v is not None else None
+
+    expert = conn.execute(
+        """
+        SELECT s.normalized, coalesce(src.trust_weight, 0.5)
+        FROM score_signals s LEFT JOIN sources src ON src.id = s.source_id
+        WHERE s.product_id = %s AND s.signal_type = 'expert_review' AND s.normalized IS NOT NULL
+        """,
+        (product_id,),
+    ).fetchall()
+    reviews = conn.execute(
+        """
+        SELECT r.rating_adjusted, r.review_count, r.source_id, coalesce(src.trust_weight, 0.5)
+        FROM reviews_aggregate r LEFT JOIN sources src ON src.id = r.source_id
+        WHERE r.product_id = %s
+        """,
+        (product_id,),
+    ).fetchall()
+    specs = conn.execute(
+        "SELECT attribute_key, value_num, value_text, source_id FROM specs WHERE product_id = %s",
+        (product_id,),
+    ).fetchall()
+    themes = conn.execute(
+        "SELECT theme, polarity, frequency FROM review_themes WHERE product_id = %s", (product_id,)
+    ).fetchall()
+    price = conn.execute(
+        "SELECT min(price) FROM offers WHERE product_id = %s AND in_stock = true", (product_id,)
+    ).fetchone()[0]
+    trusts = conn.execute(
+        """
+        SELECT coalesce(trust_weight, 0.5) FROM sources WHERE id IN (
+            SELECT source_id FROM score_signals WHERE product_id = %s AND source_id IS NOT NULL
+            UNION SELECT source_id FROM reviews_aggregate WHERE product_id = %s AND source_id IS NOT NULL
+            UNION SELECT source_id FROM specs WHERE product_id = %s AND source_id IS NOT NULL
+        )
+        """,
+        (product_id, product_id, product_id),
+    ).fetchall()
+    return {
+        "expert": [(f(n), float(t)) for n, t in expert],
+        "reviews": [(f(r), int(c), str(sid) if sid else None, float(t)) for r, c, sid, t in reviews],
+        "specs": [(k, f(vn), vt, str(sid) if sid else None) for k, vn, vt, sid in specs],
+        "themes": [(th, pol, int(fr)) for th, pol, fr in themes],
+        "price": f(price),
+        "trusts": [float(t) for (t,) in trusts],
+    }
+
+
+def upsert_score(
+    conn: psycopg.Connection,
+    product_id: str,
+    overall: float | None,
+    sub_expert: float | None,
+    sub_users: float | None,
+    sub_material: float | None,
+    sub_value: float | None,
+    confidence: float | None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO scores (product_id, overall, sub_expert, sub_users, sub_material, sub_value, confidence, computed_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, now())
+        ON CONFLICT (product_id) DO UPDATE SET
+            overall = EXCLUDED.overall, sub_expert = EXCLUDED.sub_expert, sub_users = EXCLUDED.sub_users,
+            sub_material = EXCLUDED.sub_material, sub_value = EXCLUDED.sub_value,
+            confidence = EXCLUDED.confidence, computed_at = now()
+        """,
+        (product_id, overall, sub_expert, sub_users, sub_material, sub_value, confidence),
+    )
+
+
+_DERIVED_SIGNALS = ("user_rating", "material", "warranty", "durability", "certification", "value")
+
+
+def replace_derived_signals(conn: psycopg.Connection, product_id: str, signals: list[dict]) -> None:
+    """Substitui os sinais DERIVADOS (mantém os curados, ex.: expert_review)."""
+    conn.execute(
+        "DELETE FROM score_signals WHERE product_id = %s AND signal_type = ANY(%s)",
+        (product_id, list(_DERIVED_SIGNALS)),
+    )
+    for s in signals:
+        conn.execute(
+            """
+            INSERT INTO score_signals
+                (product_id, signal_type, raw_value, normalized, weight, source_id, source_url, confidence)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                product_id,
+                s["signal_type"],
+                s.get("raw_value"),
+                s.get("normalized"),
+                s.get("weight"),
+                s.get("source_id"),
+                s.get("source_url"),
+                s.get("confidence"),
+            ),
+        )
+
+
+def categories_for_scoring(conn: psycopg.Connection) -> list[tuple[str, str, bool]]:
+    """Categorias com produtos (id, slug, rankings_enabled)."""
+    rows = conn.execute(
+        """
+        SELECT id, slug, rankings_enabled FROM categories c
+        WHERE EXISTS (SELECT 1 FROM products p WHERE p.category_id = c.id)
+        ORDER BY slug
+        """
+    ).fetchall()
+    return [(str(r[0]), r[1], bool(r[2])) for r in rows]
+
+
+def ranking_exists(
+    conn: psycopg.Connection, category_id: str, criterion: str, period_type: str, period_key: str
+) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM rankings WHERE category_id=%s AND criterion=%s AND period_type=%s AND period_key=%s",
+            (category_id, criterion, period_type, period_key),
+        ).fetchone()
+        is not None
+    )

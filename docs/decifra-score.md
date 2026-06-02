@@ -39,10 +39,37 @@ confidence = (1 − e^(−0.55·nFontes)) · (0.5 + 0.5·trustMédio)
 | ≥ 0.50 | 🟡 amarelo | Fontes suficientes, corroboração parcial. |
 | < 0.50 | 🔴 vermelho | Poucas fontes ou divergência. |
 
+## De onde vêm os sub-scores (recompute)
+
+O recompute (`workers`, `python -m decifra_workers score-recompute`) **deriva** os 4
+sub-scores de sinais reais e grava-os em `scores` (a matemática vive em
+`workers/decifra_workers/scoring.py`):
+
+- **sub_expert** — média ponderada (por `trust_weight`) dos veredictos curados em
+  `score_signals` (`signal_type='expert_review'`, com `source_url` para a fonte — **nunca** o conteúdo).
+- **sub_users** — `reviews_aggregate.rating_adjusted` (0-5 → 0-100), ponderado por volume.
+- **sub_material** — garantia + TBW + certificações (IP/MIL-STD nas specs) + temas de
+  durabilidade/construção dos `review_themes`.
+- **sub_value** — qualidade-base por € **relativa à categoria** (mapeada para 50-100).
+
+Cada contribuição fica em `score_signals` com `source_id`/`confidence` (auditável).
+
+### Como adicionar fontes de especialista
+
+Insere um sinal curado (sem republicar conteúdo):
+
+```sql
+INSERT INTO score_signals (product_id, signal_type, normalized, weight, source_id, source_url, confidence)
+VALUES ('<product_id>', 'expert_review', 92, 0.35, '<source_id>', 'https://rtings.com/…', 0.9);
+```
+
+O próximo recompute recalcula `sub_expert` a partir destes sinais (renormalizando se faltarem).
+
 ## Auditabilidade
 
 Cada sinal que entra no score é gravado em `score_signals` com `raw_value`, `normalized`,
-`weight`, `source_id` e `captured_at`. É sempre possível reconstruir o porquê de um número.
+`weight`, `source_id`, `source_url`, `confidence` e `captured_at`. É sempre possível
+reconstruir o porquê de um número.
 
 ## Rankings (imutáveis por período)
 
