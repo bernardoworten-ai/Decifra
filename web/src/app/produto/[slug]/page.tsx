@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { FavoriteBox } from "@/components/FavoriteBox";
 import { PriceTable } from "@/components/PriceTable";
 import { ReviewsBlock } from "@/components/ReviewsBlock";
 import { ScorePanel } from "@/components/ScorePanel";
@@ -114,6 +115,7 @@ export default async function ProductPage({ params }: PageProps) {
         <div className="space-y-6 lg:sticky lg:top-20 lg:self-start">
           <ScorePanel score={product.score} sourceCount={sourceCount} />
           <PriceTable offers={product.offers} />
+          <FavoriteBox productId={product.id} />
         </div>
       </div>
     </div>

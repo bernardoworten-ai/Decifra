@@ -55,6 +55,9 @@ function SiteHeader() {
           <Link href="/tops" className="hover:text-slate-900">
             Tops
           </Link>
+          <Link href="/favoritos" className="hover:text-slate-900">
+            ♥ Favoritos
+          </Link>
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
             MVP v1
           </span>

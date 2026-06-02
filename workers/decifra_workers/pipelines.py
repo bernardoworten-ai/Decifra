@@ -150,6 +150,40 @@ def generate_finder_questions(
         conn.close()
 
 
+def check_price_alerts(settings: Settings | None = None) -> RunResult:
+    """Verifica os favoritos com alerta: dispara quando o preço mais baixo em
+    stock desce ao/abaixo do alvo. (Envio por email pendente do fornecedor.)"""
+    settings = settings or Settings.from_env()
+    conn = db.connect(settings.database_url)
+    try:
+        run_id = db.start_run(conn, None, "price_alert")
+        rows = conn.execute(
+            """
+            SELECT u.email, p.canonical_name, si.price_alert,
+                   (SELECT min(price) FROM offers o WHERE o.product_id = si.product_id AND o.in_stock = true) AS cheapest
+            FROM saved_items si
+            JOIN products p ON p.id = si.product_id
+            JOIN users u ON u.id = si.user_id
+            WHERE si.price_alert IS NOT NULL
+            """
+        ).fetchall()
+
+        triggered = 0
+        for email, name, alert, cheapest in rows:
+            if cheapest is not None and float(cheapest) <= float(alert):
+                triggered += 1
+                dest = email or "(utilizador anónimo, sem email)"
+                print(f"[alerta] {name}: {float(cheapest):.2f}€ ≤ {float(alert):.2f}€ → {dest}")
+
+        db.finish_run(conn, run_id, "ok", triggered, f"{len(rows)} alertas, {triggered} disparados")
+        return RunResult(
+            "ok", triggered,
+            notes=f"{triggered}/{len(rows)} alertas disparados (envio de email pendente).",
+        )
+    finally:
+        conn.close()
+
+
 # ── Ainda por implementar (próximas fases) ────────────────────────────────────
 def refresh_price_live(product_id: str) -> RunResult:
     """Botão "atualizar": Google Shopping (SerpApi/Bright Data) → `offers`. Pago."""

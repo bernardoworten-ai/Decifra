@@ -301,7 +301,8 @@ export const finderSessions = pgTable("finder_sessions", {
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
-  email: varchar("email", { length: 320 }).notNull().unique(),
+  // Opcional: utilizadores anónimos (cookie) não têm email; só é preciso p/ alertas.
+  email: varchar("email", { length: 320 }).unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
