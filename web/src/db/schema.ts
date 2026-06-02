@@ -338,6 +338,30 @@ export const ingestionRuns = pgTable(
   (t) => [index("ingestion_runs_source_idx").on(t.sourceId)],
 );
 
+// ─────────────────────  COMPATIBILIDADE / ACESSÓRIOS  ─────────────────────
+export const productCompatibility = pgTable(
+  "product_compatibility",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accessoryId: uuid("accessory_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    baseId: uuid("base_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    relation: varchar("relation", { length: 24 }).notNull().default("accessory"),
+    note: varchar("note", { length: 300 }),
+    sourceId: uuid("source_id").references(() => sources.id),
+    confidence: numeric("confidence").notNull().default("0.8"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("product_compat_uq").on(t.accessoryId, t.baseId, t.relation),
+    index("product_compat_base_idx").on(t.baseId),
+    index("product_compat_accessory_idx").on(t.accessoryId),
+  ],
+);
+
 // ─────────────────────────────  RELAÇÕES  ────────────────────────────────
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
   parent: one(categories, {
@@ -369,6 +393,22 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   themes: many(reviewThemes),
   score: one(scores),
   signals: many(scoreSignals),
+  // Compatibilidade: acessórios deste aparelho / aparelhos com que este acessório encaixa.
+  accessories: many(productCompatibility, { relationName: "compat_base" }),
+  compatibleWith: many(productCompatibility, { relationName: "compat_accessory" }),
+}));
+
+export const productCompatibilityRelations = relations(productCompatibility, ({ one }) => ({
+  accessory: one(products, {
+    fields: [productCompatibility.accessoryId],
+    references: [products.id],
+    relationName: "compat_accessory",
+  }),
+  base: one(products, {
+    fields: [productCompatibility.baseId],
+    references: [products.id],
+    relationName: "compat_base",
+  }),
 }));
 
 export const productIdentifiersRelations = relations(productIdentifiers, ({ one }) => ({

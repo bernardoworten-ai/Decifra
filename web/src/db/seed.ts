@@ -7,13 +7,14 @@
  *   npm run db:seed
  */
 import "dotenv/config";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   categories,
   categoryAttributes,
   ingestionRuns,
   offers,
+  productCompatibility,
   productIdentifiers,
   products,
   reviewThemes,
@@ -111,6 +112,25 @@ async function main() {
     level: 2,
     parentId: catWearables,
   });
+  // Acessórios (v3: compatibilidade com aparelhos-base).
+  const catAcessorios = await insertCategory({
+    slug: "acessorios",
+    name: "Acessórios",
+    level: 1,
+    parentId: setorTech,
+  });
+  const tipoBandas = await insertCategory({
+    slug: "bandas-smartwatch",
+    name: "Bandas para smartwatch",
+    level: 2,
+    parentId: catAcessorios,
+  });
+  const tipoAlmofadas = await insertCategory({
+    slug: "almofadas-auscultadores",
+    name: "Almofadas para auscultadores",
+    level: 2,
+    parentId: catAcessorios,
+  });
 
   // Atributos por categoria (alimentam finder + explicação de specs).
   await db.insert(categoryAttributes).values([
@@ -136,6 +156,9 @@ async function main() {
     attr(tipoSmartwatch, "ecg", "Sensor ECG", null, "bool", 3, { w: 0.1 }),
     attr(tipoSmartwatch, "sistema", "Sistema operativo", null, "enum", 4, { w: 0.05 }),
     attr(tipoSmartwatch, "caixa", "Tamanho da caixa", "mm", "number", 5, { w: 0.05 }),
+    // Bandas (acessório) — discriminantes curados.
+    attr(tipoBandas, "material", "Material", null, "enum", 0, { disc: true, w: 0.1 }),
+    attr(tipoBandas, "compat_caixa", "Caixa compatível", "mm", "number", 1, { disc: true, w: 0.1 }),
   ]);
 
   // ── Produtos ──────────────────────────────────────────────────────────────
@@ -471,6 +494,58 @@ async function main() {
     sub: { expert: 90, users: 92, material: 86, value: 72 },
   });
 
+  // ── Acessórios + compatibilidade (v3) ───────────────────────────────────────
+  const banda45 = await seedAccessory({
+    categoryId: tipoBandas,
+    slug: "banda-desportiva-45mm",
+    brand: "Spigen",
+    model: "Banda Desportiva 45mm",
+    canonicalName: "Spigen Banda Desportiva 45mm",
+    summary: "Banda desportiva em silicone para smartwatches de caixa 45 mm.",
+    ean: "8809811864521",
+    price: 24.99,
+    specs: [
+      spec("material", { text: "Silicone", src: "icecat", conf: 0.85, corr: 1 }),
+      spec("compat_caixa", { num: 45, unit: "mm", src: "icecat", conf: 0.9, corr: 1 }),
+    ],
+  });
+  const banda44 = await seedAccessory({
+    categoryId: tipoBandas,
+    slug: "banda-pele-44mm",
+    brand: "Spigen",
+    model: "Banda em Pele 44mm",
+    canonicalName: "Spigen Banda em Pele 44mm",
+    summary: "Banda em pele para smartwatches de caixa 44 mm.",
+    ean: "8809811864538",
+    price: 29.99,
+    specs: [
+      spec("material", { text: "Pele", src: "icecat", conf: 0.85, corr: 1 }),
+      spec("compat_caixa", { num: 44, unit: "mm", src: "icecat", conf: 0.9, corr: 1 }),
+    ],
+  });
+  const almofadas = await seedAccessory({
+    categoryId: tipoAlmofadas,
+    slug: "almofadas-substituicao-overear",
+    brand: "Brainwavz",
+    model: "Almofadas Over-ear",
+    canonicalName: "Brainwavz Almofadas de Substituição Over-ear",
+    summary: "Almofadas de substituição em espuma com memória para auscultadores over-ear.",
+    ean: "0700604300012",
+    price: 19.99,
+  });
+
+  // Ligações de compatibilidade (acessório → aparelho-base, golden record ↔ golden record).
+  const appleWatch = await pidBySlug("apple-watch-series-9");
+  const galaxyWatch = await pidBySlug("samsung-galaxy-watch6");
+  const sonyHp = await pidBySlug("sony-wh-1000xm5");
+  const boseHp = await pidBySlug("bose-quietcomfort-ultra");
+  await db.insert(productCompatibility).values([
+    { accessoryId: banda45, baseId: appleWatch, relation: "fits", note: "Caixa de 45 mm", confidence: "0.95" },
+    { accessoryId: banda44, baseId: galaxyWatch, relation: "fits", note: "Caixa de 44 mm", confidence: "0.95" },
+    { accessoryId: almofadas, baseId: sonyHp, relation: "fits", note: "Almofadas over-ear", confidence: "0.8" },
+    { accessoryId: almofadas, baseId: boseHp, relation: "fits", note: "Almofadas over-ear", confidence: "0.8" },
+  ]);
+
   // ── Operação (auditoria / frescura) ───────────────────────────────────────
   await db.insert(ingestionRuns).values([
     {
@@ -493,7 +568,7 @@ async function main() {
     },
   ]);
 
-  console.log("✓ Seed concluído: 7 produtos (3 categorias; smartwatches = cauda longa p/ IA).");
+  console.log("✓ Seed concluído: 10 produtos (+ acessórios e compatibilidade v3).");
   await closeDb();
 }
 
@@ -517,6 +592,69 @@ async function insertCategory(vals: {
     })
     .returning({ id: categories.id });
   return row.id;
+}
+
+async function seedAccessory(p: {
+  categoryId: string;
+  slug: string;
+  brand: string;
+  model: string;
+  canonicalName: string;
+  summary: string;
+  ean: string;
+  price: number;
+  specs?: ReturnType<typeof spec>[];
+}): Promise<string> {
+  const [prod] = await db
+    .insert(products)
+    .values({
+      categoryId: p.categoryId,
+      slug: p.slug,
+      brand: p.brand,
+      model: p.model,
+      canonicalName: p.canonicalName,
+      summary: p.summary,
+      imageUrl: img(p.canonicalName),
+      status: "a_venda",
+      matchConfidence: "0.9",
+      needsReview: false,
+    })
+    .returning({ id: products.id });
+  const productId = prod.id;
+
+  await db.insert(productIdentifiers).values({ productId, idType: "ean", idValue: p.ean });
+  await db.insert(offers).values({
+    productId,
+    storeId: store["Amazon.es"],
+    price: String(p.price),
+    currency: "EUR",
+    urlAffiliate: `https://www.awin1.com/cread.php?awinmid=0&p=${encodeURIComponent(
+      `https://example.com/${p.slug}`,
+    )}`,
+    inStock: true,
+    sourceId: src.awin_feed,
+    capturedAt: daysAgo(1),
+  });
+  if (p.specs?.length) {
+    await db.insert(specs).values(
+      p.specs.map((s) => ({
+        productId,
+        attributeKey: s.key,
+        valueText: s.text ?? null,
+        valueNum: s.num !== undefined ? String(s.num) : null,
+        unit: s.unit ?? null,
+        sourceId: src[s.src],
+        confidence: String(s.conf),
+        corroborations: s.corr,
+      })),
+    );
+  }
+  return productId;
+}
+
+async function pidBySlug(slug: string): Promise<string> {
+  const [r] = await db.select({ id: products.id }).from(products).where(eq(products.slug, slug)).limit(1);
+  return r.id;
 }
 
 function attr(

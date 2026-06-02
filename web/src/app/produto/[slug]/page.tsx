@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Compatibility } from "@/components/Compatibility";
 import { FavoriteBox } from "@/components/FavoriteBox";
 import { PriceTable } from "@/components/PriceTable";
 import { ReviewsBlock } from "@/components/ReviewsBlock";
@@ -110,6 +111,7 @@ export default async function ProductPage({ params }: PageProps) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <SpecsTable specs={product.specs} meta={attributeMeta} />
+          <Compatibility product={product} />
           <ReviewsBlock reviews={product.reviews} themes={product.themes} />
         </div>
         <div className="space-y-6 lg:sticky lg:top-20 lg:self-start">

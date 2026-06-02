@@ -42,6 +42,9 @@ export async function getProductDetail(slug: string) {
       },
       score: true,
       signals: { with: { source: true } },
+      // Compatibilidade (v3): acessórios deste aparelho / aparelhos deste acessório.
+      accessories: { with: { accessory: { with: { offers: true, category: true } } } },
+      compatibleWith: { with: { base: { with: { category: true } } } },
     },
   });
 

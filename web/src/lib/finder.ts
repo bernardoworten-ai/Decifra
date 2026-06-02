@@ -15,11 +15,23 @@ import {
   categories,
   categoryAttributes,
   finderSessions,
+  productCompatibility,
   products,
   scores,
   specs,
 } from "@/db/schema";
 import { num } from "./num";
+
+/** Aparelho-base (para o filtro de compatibilidade do finder). */
+export async function getBaseProduct(slug: string) {
+  const db = getDb();
+  const [p] = await db
+    .select({ id: products.id, slug: products.slug, canonicalName: products.canonicalName })
+    .from(products)
+    .where(eq(products.slug, slug))
+    .limit(1);
+  return p ?? null;
+}
 
 export type FinderOption = { value: string; label: string };
 export type FinderQuestion = {
@@ -158,13 +170,25 @@ function formatSpecValue(
 }
 
 /** Filtra a categoria pelas respostas (AND sobre specs) e ordena por score. */
-export async function runFinder(categoryId: string, answers: Record<string, string>) {
+export async function runFinder(
+  categoryId: string,
+  answers: Record<string, string>,
+  fitsBaseId?: string | null,
+) {
   const db = getDb();
   const attrs = await discriminantAttributes(categoryId);
   const attrByKey = new Map(attrs.map((a) => [a.key, a]));
 
   const conditions = [eq(products.categoryId, categoryId)];
   const answeredKeys: string[] = [];
+
+  // Compatibilidade (v3): só acessórios que encaixam no aparelho-base escolhido.
+  if (fitsBaseId) {
+    conditions.push(
+      sql`EXISTS (SELECT 1 FROM ${productCompatibility} pc
+        WHERE pc.accessory_id = ${products.id} AND pc.base_id = ${fitsBaseId})`,
+    );
+  }
 
   for (const [key, raw] of Object.entries(answers)) {
     const attr = attrByKey.get(key);

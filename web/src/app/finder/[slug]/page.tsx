@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FinderResult } from "@/components/FinderResult";
 import {
+  getBaseProduct,
   getFinderCategoryBySlug,
   getFinderQuestions,
   recordFinderSession,
@@ -30,11 +31,14 @@ function buildHref(
   answers: Record<string, string>,
   key: string,
   value: string | null,
+  fits?: string,
 ): string {
   const next = { ...answers };
   if (value === null) delete next[key];
   else next[key] = value;
-  const qs = new URLSearchParams(next).toString();
+  const params = new URLSearchParams(next);
+  if (fits) params.set("fits", fits);
+  const qs = params.toString();
   return qs ? `/finder/${slug}?${qs}` : `/finder/${slug}`;
 }
 
@@ -44,24 +48,26 @@ export default async function FinderCategoryPage({ params, searchParams }: PageP
   const category = await getFinderCategoryBySlug(slug);
   if (!category) notFound();
 
+  const fits = pick(sp.fits);
+  const base = fits ? await getBaseProduct(fits) : null;
   const questions = await getFinderQuestions(category.id);
-  if (questions.length === 0) notFound();
+  // Só 404 se não houver perguntas nem filtro de compatibilidade.
+  if (questions.length === 0 && !base) notFound();
 
-  // Respostas válidas = só chaves de perguntas conhecidas.
   const answers: Record<string, string> = {};
   for (const q of questions) {
     const v = pick(sp[q.key]);
     if (v) answers[q.key] = v;
   }
 
-  const { candidates, total, answeredCount } = await runFinder(category.id, answers);
+  const { candidates, total, answeredCount } = await runFinder(category.id, answers, base?.id);
 
-  // Analítica: regista a sessão quando o funil está completo (baixo volume).
   if (answeredCount > 0 && answeredCount === questions.length) {
     await recordFinderSession(category.id, answers, candidates.map((c) => c.id));
   }
 
   const hasAnswers = answeredCount > 0;
+  const clearHref = fits ? `/finder/${slug}?fits=${fits}` : `/finder/${slug}`;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -78,14 +84,24 @@ export default async function FinderCategoryPage({ params, searchParams }: PageP
           Encontrar {category.name.toLowerCase()}
         </h1>
         {hasAnswers && (
-          <Link href={`/finder/${slug}`} className="text-sm font-medium text-indigo-600 hover:underline">
+          <Link href={clearHref} className="text-sm font-medium text-indigo-600 hover:underline">
             Limpar filtros
           </Link>
         )}
       </div>
 
+      {base && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-indigo-50 px-4 py-2 text-sm text-indigo-800 ring-1 ring-indigo-100">
+          <span>
+            A mostrar apenas compatíveis com <strong>{base.canonicalName}</strong>.
+          </span>
+          <Link href={`/finder/${slug}`} className="font-medium underline">
+            ver todos
+          </Link>
+        </div>
+      )}
+
       <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[320px_1fr]">
-        {/* Perguntas discriminantes */}
         <div className="space-y-5">
           {questions.map((q) => {
             const current = answers[q.key];
@@ -96,13 +112,19 @@ export default async function FinderCategoryPage({ params, searchParams }: PageP
                   {q.unit ? <span className="font-normal text-slate-400"> ({q.unit})</span> : null}
                 </legend>
                 <div className="flex flex-wrap gap-2">
-                  <Chip href={buildHref(slug, answers, q.key, null)} active={!current}>
+                  <Chip href={buildHref(slug, answers, q.key, null, fits)} active={!current}>
                     Indiferente
                   </Chip>
                   {q.options.map((opt) => (
                     <Chip
                       key={opt.value}
-                      href={buildHref(slug, answers, q.key, current === opt.value ? null : opt.value)}
+                      href={buildHref(
+                        slug,
+                        answers,
+                        q.key,
+                        current === opt.value ? null : opt.value,
+                        fits,
+                      )}
                       active={current === opt.value}
                     >
                       {opt.label}
@@ -112,9 +134,11 @@ export default async function FinderCategoryPage({ params, searchParams }: PageP
               </fieldset>
             );
           })}
+          {questions.length === 0 && (
+            <p className="text-sm text-slate-400">Sem perguntas — filtrado por compatibilidade.</p>
+          )}
         </div>
 
-        {/* Resultados */}
         <div>
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="font-semibold text-slate-900">
@@ -131,10 +155,7 @@ export default async function FinderCategoryPage({ params, searchParams }: PageP
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
               <p className="text-slate-500">Nenhum produto cumpre todos os critérios.</p>
-              <Link
-                href={`/finder/${slug}`}
-                className="mt-2 inline-block text-sm font-medium text-indigo-600 hover:underline"
-              >
+              <Link href={clearHref} className="mt-2 inline-block text-sm font-medium text-indigo-600 hover:underline">
                 Aliviar filtros
               </Link>
             </div>
