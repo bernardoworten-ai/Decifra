@@ -37,6 +37,14 @@ export default async function Home({
           <Feature>Reviews ajustadas por autenticidade</Feature>
           <Feature>Finder por specs</Feature>
         </div>
+        <div className="mt-6">
+          <Link
+            href="/finder"
+            className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+          >
+            Não sabes o modelo? Usa o Finder por specs →
+          </Link>
+        </div>
       </section>
 
       <div className="mb-4 flex items-baseline justify-between">

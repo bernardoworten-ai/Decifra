@@ -49,6 +49,9 @@ function SiteHeader() {
           <Link href="/" className="hover:text-slate-900">
             Produtos
           </Link>
+          <Link href="/finder" className="hover:text-slate-900">
+            Finder
+          </Link>
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
             MVP v1
           </span>
