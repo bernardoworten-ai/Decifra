@@ -249,3 +249,67 @@ def insert_ranking_item(
         """,
         (ranking_id, rank, product_id, score_at_time, rationale),
     )
+
+
+# ── Finder (cauda longa: escolha de atributos discriminantes por IA) ─────────
+def category_by_slug(conn: psycopg.Connection, slug: str) -> tuple[str, str, str] | None:
+    row = conn.execute("SELECT id, name, slug FROM categories WHERE slug = %s", (slug,)).fetchone()
+    return (str(row[0]), row[1], row[2]) if row else None
+
+
+def categories_needing_questions(conn: psycopg.Connection) -> list[tuple[str, str, str]]:
+    """Categorias com atributos mas sem nenhum discriminante (a cauda longa)."""
+    rows = conn.execute(
+        """
+        SELECT c.id, c.name, c.slug FROM categories c
+        WHERE EXISTS (SELECT 1 FROM category_attributes a WHERE a.category_id = c.id)
+          AND NOT EXISTS (
+            SELECT 1 FROM category_attributes a
+            WHERE a.category_id = c.id AND a.is_discriminant = true
+          )
+        ORDER BY c.name
+        """
+    ).fetchall()
+    return [(str(r[0]), r[1], r[2]) for r in rows]
+
+
+def attribute_stats(conn: psycopg.Connection, category_id: str) -> list[dict]:
+    """Para cada atributo da categoria, os valores distintos presentes nos produtos."""
+    attrs = conn.execute(
+        "SELECT key, label, data_type, unit FROM category_attributes WHERE category_id = %s ORDER BY display_order",
+        (category_id,),
+    ).fetchall()
+    stats = []
+    for key, label, data_type, unit in attrs:
+        vals = conn.execute(
+            """
+            SELECT DISTINCT coalesce(s.value_text, s.value_num::text) AS v
+            FROM specs s JOIN products p ON p.id = s.product_id
+            WHERE p.category_id = %s AND s.attribute_key = %s
+              AND (s.value_text IS NOT NULL OR s.value_num IS NOT NULL)
+            ORDER BY v
+            """,
+            (category_id, key),
+        ).fetchall()
+        stats.append(
+            {
+                "key": key,
+                "label": label,
+                "data_type": data_type,
+                "unit": unit,
+                "values": [r[0] for r in vals],
+            }
+        )
+    return stats
+
+
+def set_discriminant(conn: psycopg.Connection, category_id: str, keys: list[str]) -> None:
+    conn.execute(
+        "UPDATE category_attributes SET is_discriminant = false WHERE category_id = %s",
+        (category_id,),
+    )
+    if keys:
+        conn.execute(
+            "UPDATE category_attributes SET is_discriminant = true WHERE category_id = %s AND key = ANY(%s)",
+            (category_id, keys),
+        )

@@ -97,6 +97,20 @@ async function main() {
     parentId: catArmazenamento,
     rankingsEnabled: true,
   });
+  // Cauda longa: categoria SEM atributos discriminantes curados — o finder usa IA
+  // (Haiku, worker finder-questions) para escolher as perguntas discriminantes.
+  const catWearables = await insertCategory({
+    slug: "wearables",
+    name: "Wearables",
+    level: 1,
+    parentId: setorTech,
+  });
+  const tipoSmartwatch = await insertCategory({
+    slug: "smartwatches",
+    name: "Smartwatches",
+    level: 2,
+    parentId: catWearables,
+  });
 
   // Atributos por categoria (alimentam finder + explicação de specs).
   await db.insert(categoryAttributes).values([
@@ -115,6 +129,13 @@ async function main() {
     attr(tipoSsd, "escrita_seq", "Escrita sequencial", "MB/s", "number", 3, { w: 0.15 }),
     attr(tipoSsd, "tbw", "Resistência (TBW)", "TB", "number", 4, { w: 0.15 }),
     attr(tipoSsd, "garantia", "Garantia", "anos", "number", 5, { w: 0.1 }),
+    // Smartwatches — SEM disc:true de propósito (a IA decide quais são discriminantes).
+    attr(tipoSmartwatch, "mostrador", "Tipo de mostrador", null, "enum", 0, { w: 0.1 }),
+    attr(tipoSmartwatch, "gps", "GPS integrado", null, "bool", 1, { w: 0.1 }),
+    attr(tipoSmartwatch, "autonomia", "Autonomia", "dias", "number", 2, { w: 0.2 }),
+    attr(tipoSmartwatch, "ecg", "Sensor ECG", null, "bool", 3, { w: 0.1 }),
+    attr(tipoSmartwatch, "sistema", "Sistema operativo", null, "enum", 4, { w: 0.05 }),
+    attr(tipoSmartwatch, "caixa", "Tamanho da caixa", "mm", "number", 5, { w: 0.05 }),
   ]);
 
   // ── Produtos ──────────────────────────────────────────────────────────────
@@ -350,6 +371,106 @@ async function main() {
     sub: { expert: 92, users: 94, material: 88, value: 90 },
   });
 
+  // ── Smartwatches (cauda longa: specs com variância p/ a IA escolher) ────────
+  await seedProduct({
+    categoryId: tipoSmartwatch,
+    slug: "apple-watch-series-9",
+    brand: "Apple",
+    model: "Watch Series 9",
+    canonicalName: "Apple Watch Series 9 45mm",
+    summary: "Smartwatch da Apple com ecrã AMOLED, ECG e GPS. Integração forte no ecossistema Apple.",
+    ean: "195949022112",
+    matchConfidence: "0.97",
+    specs: [
+      spec("mostrador", { text: "AMOLED", src: "icecat", conf: 0.9, corr: 2 }),
+      spec("gps", { text: "Sim", num: 1, src: "icecat", conf: 0.9, corr: 2 }),
+      spec("autonomia", { num: 1, unit: "dias", src: "rtings", conf: 0.85, corr: 2 }),
+      spec("ecg", { text: "Sim", num: 1, src: "icecat", conf: 0.9, corr: 2 }),
+      spec("sistema", { text: "watchOS", src: "icecat", conf: 0.95, corr: 3 }),
+      spec("caixa", { num: 45, unit: "mm", src: "icecat", conf: 0.9, corr: 2 }),
+    ],
+    offers: [
+      offer("Amazon.es", 439.0, { src: "awin_feed", days: 1 }),
+      offer("Worten", 449.0, { src: "awin_feed", days: 1 }),
+    ],
+    reviews: [
+      review("amazon", {
+        raw: 4.7, adjusted: 4.6, count: 5200,
+        dist: { "5": 3800, "4": 900, "3": 300, "2": 120, "1": 80 }, auth: 0.84,
+        summary: "Ecrã e integração elogiados; autonomia de cerca de um dia é a queixa principal.",
+        url: "https://www.amazon.es/dp/B0CHX3QBCH",
+      }),
+    ],
+    themes: [theme("Ecrã", "positivo", 210), theme("Autonomia", "negativo", 180)],
+    sub: { expert: 88, users: 90, material: 90, value: 70 },
+  });
+
+  await seedProduct({
+    categoryId: tipoSmartwatch,
+    slug: "samsung-galaxy-watch6",
+    brand: "Samsung",
+    model: "Galaxy Watch6",
+    canonicalName: "Samsung Galaxy Watch6 44mm",
+    summary: "Smartwatch com Wear OS, ECG e GPS, com bom equilíbrio entre funcionalidades e preço.",
+    ean: "8806095043564",
+    matchConfidence: "0.96",
+    specs: [
+      spec("mostrador", { text: "AMOLED", src: "icecat", conf: 0.9, corr: 2 }),
+      spec("gps", { text: "Sim", num: 1, src: "icecat", conf: 0.9, corr: 2 }),
+      spec("autonomia", { num: 2, unit: "dias", src: "rtings", conf: 0.85, corr: 2 }),
+      spec("ecg", { text: "Sim", num: 1, src: "icecat", conf: 0.9, corr: 2 }),
+      spec("sistema", { text: "Wear OS", src: "icecat", conf: 0.95, corr: 3 }),
+      spec("caixa", { num: 44, unit: "mm", src: "icecat", conf: 0.9, corr: 2 }),
+    ],
+    offers: [
+      offer("Amazon.es", 319.0, { src: "awin_feed", days: 1 }),
+      offer("Worten", 329.0, { src: "awin_feed", days: 2 }),
+    ],
+    reviews: [
+      review("amazon", {
+        raw: 4.5, adjusted: 4.4, count: 3100,
+        dist: { "5": 2000, "4": 700, "3": 250, "2": 90, "1": 60 }, auth: 0.82,
+        summary: "Boa relação qualidade/preço; autonomia mediana e ecossistema Android destacados.",
+        url: "https://www.amazon.es/dp/B0C7KSF8X4",
+      }),
+    ],
+    themes: [theme("Preço", "positivo", 160), theme("Autonomia", "misto", 120)],
+    sub: { expert: 84, users: 85, material: 84, value: 78 },
+  });
+
+  await seedProduct({
+    categoryId: tipoSmartwatch,
+    slug: "garmin-forerunner-265",
+    brand: "Garmin",
+    model: "Forerunner 265",
+    canonicalName: "Garmin Forerunner 265",
+    summary: "Relógio de corrida com GPS, ecrã AMOLED e autonomia de vários dias. Foco em desporto.",
+    ean: "753759308980",
+    matchConfidence: "0.97",
+    specs: [
+      spec("mostrador", { text: "AMOLED", src: "icecat", conf: 0.9, corr: 2 }),
+      spec("gps", { text: "Sim", num: 1, src: "icecat", conf: 0.9, corr: 2 }),
+      spec("autonomia", { num: 13, unit: "dias", src: "rtings", conf: 0.85, corr: 2 }),
+      spec("ecg", { text: "Não", num: 0, src: "icecat", conf: 0.85, corr: 2 }),
+      spec("sistema", { text: "Garmin OS", src: "icecat", conf: 0.95, corr: 3 }),
+      spec("caixa", { num: 46, unit: "mm", src: "icecat", conf: 0.9, corr: 2 }),
+    ],
+    offers: [
+      offer("Amazon.es", 479.0, { src: "awin_feed", days: 1 }),
+      offer("Worten", 499.0, { src: "awin_feed", days: 2 }),
+    ],
+    reviews: [
+      review("amazon", {
+        raw: 4.8, adjusted: 4.7, count: 2400,
+        dist: { "5": 1900, "4": 350, "3": 90, "2": 40, "1": 20 }, auth: 0.86,
+        summary: "Autonomia e métricas de treino muito elogiadas; menos vocacionado para uso geral.",
+        url: "https://www.amazon.es/dp/B0BS1NHy3K",
+      }),
+    ],
+    themes: [theme("Autonomia", "positivo", 240), theme("GPS / treino", "positivo", 200)],
+    sub: { expert: 90, users: 92, material: 86, value: 72 },
+  });
+
   // ── Operação (auditoria / frescura) ───────────────────────────────────────
   await db.insert(ingestionRuns).values([
     {
@@ -372,7 +493,7 @@ async function main() {
     },
   ]);
 
-  console.log("✓ Seed concluído: 4 produtos, 2 categorias com rankings ativos.");
+  console.log("✓ Seed concluído: 7 produtos (3 categorias; smartwatches = cauda longa p/ IA).");
   await closeDb();
 }
 

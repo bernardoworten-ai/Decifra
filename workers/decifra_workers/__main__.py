@@ -26,6 +26,10 @@ def main(argv: list[str] | None = None) -> int:
     p_rank.add_argument("--period", default=None, help="YYYY-MM (default: mês atual)")
     p_rank.add_argument("--no-ai", action="store_true", help="Não usar IA no rationale")
 
+    p_fq = sub.add_parser("finder-questions", help="IA escolhe perguntas discriminantes (cauda longa)")
+    p_fq.add_argument("--category", default=None, help="slug da categoria (default: todas as que faltam)")
+    p_fq.add_argument("--no-ai", action="store_true", help="Só fallback por variância")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "ingest-ean":
@@ -34,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
         res = pipelines.feed_batch(limit=args.limit)
     elif args.cmd == "score-recompute":
         res = pipelines.score_recompute_month(period_key=args.period, use_ai=not args.no_ai)
+    elif args.cmd == "finder-questions":
+        res = pipelines.generate_finder_questions(category_slug=args.category, use_ai=not args.no_ai)
     else:  # pragma: no cover
         parser.error("comando desconhecido")
 

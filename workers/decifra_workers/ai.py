@@ -6,7 +6,9 @@ recolhidos de fontes reais — instruída a não inventar.
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 
 from .models import RawRecord
 
@@ -97,3 +99,39 @@ def rank_rationale(
         return text or None
     except Exception:
         return None
+
+
+def choose_discriminant_attributes(category_name: str, attributes: list[dict]) -> list[str]:
+    """Pede ao Haiku as chaves de atributos mais discriminantes para a categoria.
+
+    `attributes`: [{key, label, data_type, values:[...]}]. Devolve lista de keys
+    (vazia se IA indisponível/falhar — o chamador aplica fallback por variância).
+    """
+    client = _client()
+    if client is None:
+        return []
+    lines = [
+        f"- {a['key']} ({a['label']}, {a['data_type']}): valores={a['values'][:6]}"
+        for a in attributes
+    ]
+    prompt = (
+        f"És o DECIFRA, um comparador de produtos. Para a categoria '{category_name}', escolhe "
+        "os 1 a 5 atributos MAIS discriminantes para ajudar alguém a escolher — prioriza os que "
+        "VARIAM entre produtos e são decisivos na compra; ignora os que têm sempre o mesmo valor. "
+        'Responde APENAS com um array JSON das chaves, ex.: ["autonomia","sistema"].\n\n'
+        "Atributos:\n" + "\n".join(lines)
+    )
+    try:
+        msg = client.messages.create(
+            model=_model(),
+            max_tokens=120,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(block.text for block in msg.content if block.type == "text")
+        match = re.search(r"\[.*\]", text, re.S)
+        if not match:
+            return []
+        arr = json.loads(match.group(0))
+        return [str(x) for x in arr if isinstance(x, str)]
+    except Exception:
+        return []

@@ -114,6 +114,42 @@ def feed_batch(settings: Settings | None = None, limit: int | None = None) -> Ru
         conn.close()
 
 
+def generate_finder_questions(
+    category_slug: str | None = None, settings: Settings | None = None, use_ai: bool = True
+) -> RunResult:
+    """Cauda longa: para categorias sem perguntas curadas, o Haiku escolhe os
+    atributos discriminantes (validado por variância; fallback determinístico)."""
+    settings = settings or Settings.from_env()
+    conn = db.connect(settings.database_url)
+    try:
+        run_id = db.start_run(conn, None, "finder_questions")
+        if category_slug:
+            target = db.category_by_slug(conn, category_slug)
+            targets = [target] if target else []
+        else:
+            targets = db.categories_needing_questions(conn)
+
+        total = 0
+        details: list[str] = []
+        for cat_id, cat_name, slug in targets:
+            stats = db.attribute_stats(conn, cat_id)
+            varying = [s for s in stats if len(s["values"]) > 1]
+            chosen = ai.choose_discriminant_attributes(cat_name, stats) if use_ai else []
+            varying_keys = {s["key"] for s in varying}
+            valid = [k for k in chosen if k in varying_keys][:5]
+            if not valid:  # fallback: por variância (mais valores distintos primeiro)
+                valid = [s["key"] for s in sorted(varying, key=lambda s: len(s["values"]), reverse=True)][:5]
+            db.set_discriminant(conn, cat_id, valid)
+            total += len(valid)
+            details.append(f"{slug}: {valid}")
+
+        notes = "; ".join(details) or "nada a fazer"
+        db.finish_run(conn, run_id, "ok", total, notes)
+        return RunResult("ok", total, notes=notes)
+    finally:
+        conn.close()
+
+
 # ── Ainda por implementar (próximas fases) ────────────────────────────────────
 def refresh_price_live(product_id: str) -> RunResult:
     """Botão "atualizar": Google Shopping (SerpApi/Bright Data) → `offers`. Pago."""
