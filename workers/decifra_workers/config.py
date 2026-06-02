@@ -13,6 +13,7 @@ load_dotenv()
 class Settings:
     database_url: str
     anthropic_api_key: str | None = None
+    anthropic_model: str | None = None
     go_upc_api_key: str | None = None
     serpapi_key: str | None = None
     icecat_username: str | None = None
@@ -27,6 +28,7 @@ class Settings:
         return cls(
             database_url=database_url,
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY"),
+            anthropic_model=os.environ.get("ANTHROPIC_MODEL"),
             go_upc_api_key=os.environ.get("GO_UPC_API_KEY"),
             serpapi_key=os.environ.get("SERPAPI_KEY"),
             icecat_username=os.environ.get("ICECAT_USERNAME"),

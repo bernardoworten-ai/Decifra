@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from . import db
+from . import ai, db
 from .config import Settings
 from .resolution import resolve_product
 from .sources import build_connectors
@@ -68,6 +68,13 @@ def ingest_by_ean(ean: str, settings: Settings | None = None, dry_run: bool = Fa
                 spec_items += 1
             db.finish_run(conn, run_id, "ok", len(rec.specs), f"{connector.name} → {product_id}")
 
+        # Enriquecimento opcional: se faltar resumo, a IA (Haiku) gera um, ancorado nos factos.
+        row = conn.execute("SELECT summary FROM products WHERE id = %s", (product_id,)).fetchone()
+        if row and not (row[0] or "").strip():
+            summary = ai.summarize_product(best)
+            if summary:
+                db.update_product_summary(conn, product_id, summary)
+
         state = "novo" if resolution.created else "existente"
         return RunResult(
             "ok", spec_items, product_id=product_id,
@@ -89,12 +96,9 @@ def feed_batch(settings: Settings | None = None, limit: int | None = None) -> Ru
     try:
         source_id = db.ensure_source(conn, awin.name, awin.kind, awin.base_url, awin.trust_weight)
         run_id = db.start_run(conn, source_id, "feed_batch")
-        text = awin.download()
         seen = matched = 0
-        for ean, offer, _row in awin.parse_rows(text):
+        for ean, offer, _row in awin.stream_rows(limit=limit):
             seen += 1
-            if limit and seen > limit:
-                break
             if not ean:
                 continue
             product_id = db.find_product_by_ean(conn, ean)

@@ -142,6 +142,10 @@ def create_product(
     return str(row[0])
 
 
+def update_product_summary(conn: psycopg.Connection, product_id: str, summary: str) -> None:
+    conn.execute("UPDATE products SET summary = %s WHERE id = %s", (summary, product_id))
+
+
 def upsert_identifier(conn: psycopg.Connection, product_id: str, id_type: str, id_value: str) -> None:
     conn.execute(
         """
