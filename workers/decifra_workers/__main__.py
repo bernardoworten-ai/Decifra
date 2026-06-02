@@ -32,6 +32,10 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("check-alerts", help="Verifica alertas de preço dos favoritos")
 
+    p_cons = sub.add_parser("consolidate", help="Consolidação real: ingere vários EAN + recompute")
+    p_cons.add_argument("eans", nargs="+", help="Um ou mais EAN/UPC")
+    p_cons.add_argument("--no-ai", action="store_true", help="Sem IA (resumos/rationale)")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "ingest-ean":

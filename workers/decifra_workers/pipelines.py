@@ -184,6 +184,32 @@ def check_price_alerts(settings: Settings | None = None) -> RunResult:
         conn.close()
 
 
+def consolidate(eans: list[str], settings: Settings | None = None, use_ai: bool = True) -> RunResult:
+    """Consolidação real, num só comando: para cada EAN faz ingest_by_ean
+    (identidade UPCitemdb + specs Icecat quando disponível + resumo IA) e, no fim,
+    recalcula rankings e (re)escolhe perguntas do finder. Degrada graciosamente:
+    sem Icecat traz só identidade; ganha specs assim que o app_key abrir."""
+    settings = settings or Settings.from_env()
+    ok = 0
+    details: list[str] = []
+    for ean in eans:
+        res = ingest_by_ean(ean, settings=settings)
+        details.append(f"{ean}={res.status}")
+        if res.status == "ok":
+            ok += 1
+    # Pós-processamento (best-effort; não quebra a consolidação).
+    try:
+        score_recompute_month(settings=settings, use_ai=use_ai)
+    except Exception as exc:  # noqa: BLE001
+        details.append(f"recompute_falhou:{exc}")
+    try:
+        generate_finder_questions(settings=settings, use_ai=use_ai)
+    except Exception as exc:  # noqa: BLE001
+        details.append(f"finder_falhou:{exc}")
+    status = "ok" if ok == len(eans) and eans else ("partial" if ok else "error")
+    return RunResult(status, ok, notes=f"{ok}/{len(eans)} ingeridos · " + "; ".join(details))
+
+
 # ── Ainda por implementar (próximas fases) ────────────────────────────────────
 def refresh_price_live(product_id: str) -> RunResult:
     """Botão "atualizar": Google Shopping (SerpApi/Bright Data) → `offers`. Pago."""
