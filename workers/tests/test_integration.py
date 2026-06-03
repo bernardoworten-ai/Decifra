@@ -91,3 +91,25 @@ def test_ingest_by_ean_e2e():
             "SELECT count(*) FROM ingestion_runs WHERE kind = 'on_demand' AND status = 'ok'"
         ).fetchone()[0]
         assert n_runs >= 1, "esperava ≥1 ingestion_run 'ok'"
+
+
+@pytest.mark.integration
+def test_icecat_open_resolves_specs():
+    """Open Icecat (só UserName, sem app_key) devolve specs para um GTIN real."""
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+    username = os.environ.get("ICECAT_USERNAME")
+    if not username:
+        pytest.skip("ICECAT_USERNAME não definido — skip do teste live do Icecat.")
+
+    from decifra_workers.sources.icecat import IcecatConnector
+
+    rec = IcecatConnector(
+        username=username, app_key=os.environ.get("ICECAT_APP_KEY") or None
+    ).fetch_by_ean("4948570114344")
+    assert rec is not None, "Icecat não devolveu dados — verifica ICECAT_USERNAME"
+    assert len(rec.specs) >= 80, f"esperava ≥80 specs, obteve {len(rec.specs)}"

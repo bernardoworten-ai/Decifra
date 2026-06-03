@@ -121,16 +121,26 @@ class IcecatConnector(SourceConnector):
         with httpx.Client(timeout=20) as client:
             resp = client.get(self.base_url, params=params)
         if resp.status_code == 403:
-            # Conteúdo Full Icecat sem app_key — skip gracioso, com aviso único.
+            # Produto só no Full Icecat (o Open Icecat não o cobre) — skip gracioso.
             if not self._warned_appkey:
                 print(
-                    f"[icecat] {ean}: precisa de app_key (Full Icecat). Define ICECAT_APP_KEY. A ignorar.",
+                    f"[icecat] {ean}: produto só disponível no Full Icecat (fora do Open Icecat). A ignorar.",
                     file=sys.stderr,
                 )
                 self._warned_appkey = True
             return None
         if resp.status_code in (400, 404):
-            return None  # GTIN não encontrado no catálogo acessível
+            # Distingue "utilizador desconhecido" (config errada) de "GTIN não encontrado".
+            if "user is unknown" in (resp.text or "").lower() or "user is invalid" in (resp.text or "").lower():
+                from .. import observability
+
+                msg = "Icecat: utilizador desconhecido — verifica ICECAT_USERNAME (não é o app_key/Access Token)."
+                print(f"[icecat] {msg}", file=sys.stderr)
+                observability.capture(
+                    RuntimeError(msg), source="icecat", username=self.username, status=resp.status_code
+                )
+                return None
+            return None  # GTIN não encontrado no catálogo acessível (silencioso)
         if resp.status_code == 429 or resp.status_code >= 500:
             raise _Retryable(f"icecat {resp.status_code}")
         resp.raise_for_status()
