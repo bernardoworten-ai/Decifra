@@ -33,6 +33,12 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("check-alerts", help="Verifica alertas de preço dos favoritos")
 
+    p_rev = sub.add_parser("review-refresh", help="Métricas de reviews por loja (sem texto, §5)")
+    p_rev.add_argument("slug", help="slug do produto")
+    p_rev.add_argument("--url", default=None, help="página pública com schema.org aggregateRating")
+    p_rev.add_argument("--source", default=None, help="nome da fonte (ex.: trustpilot, google)")
+    p_rev.add_argument("--no-ai", action="store_true", help="Sem IA (autenticidade/temas)")
+
     p_cons = sub.add_parser("consolidate", help="Consolidação real: ingere vários EAN + recompute")
     p_cons.add_argument("eans", nargs="+", help="Um ou mais EAN/UPC")
     p_cons.add_argument("--no-ai", action="store_true", help="Sem IA (resumos/rationale)")
@@ -49,6 +55,8 @@ def main(argv: list[str] | None = None) -> int:
         res = pipelines.generate_finder_questions(category_slug=args.category, use_ai=not args.no_ai)
     elif args.cmd == "check-alerts":
         res = pipelines.check_price_alerts()
+    elif args.cmd == "review-refresh":
+        res = pipelines.review_refresh(args.slug, url=args.url, source_name=args.source, use_ai=not args.no_ai)
     else:  # pragma: no cover
         parser.error("comando desconhecido")
 

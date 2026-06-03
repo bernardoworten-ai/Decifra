@@ -19,6 +19,8 @@ class Settings:
     icecat_username: str | None = None
     icecat_app_key: str | None = None
     awin_feed_url: str | None = None
+    dataforseo_login: str | None = None
+    dataforseo_password: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -34,4 +36,6 @@ class Settings:
             icecat_username=os.environ.get("ICECAT_USERNAME"),
             icecat_app_key=os.environ.get("ICECAT_APP_KEY"),
             awin_feed_url=os.environ.get("AWIN_FEED_URL"),
+            dataforseo_login=os.environ.get("DATAFORSEO_LOGIN"),
+            dataforseo_password=os.environ.get("DATAFORSEO_PASSWORD"),
         )

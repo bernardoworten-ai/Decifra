@@ -135,3 +135,70 @@ def choose_discriminant_attributes(category_name: str, attributes: list[dict]) -
         return [str(x) for x in arr if isinstance(x, str)]
     except Exception:
         return []
+
+
+def review_authenticity(signals: dict) -> tuple[float, str] | None:
+    """Deteta autenticidade (0-1) + rótulo a partir de SINAIS agregados (nunca do
+    texto). Preenche o gap do Fakespot/ReviewMeta. None se a IA estiver off."""
+    client = _client()
+    if client is None:
+        return None
+    prompt = (
+        "És o detetor de autenticidade de reviews do DECIFRA (no espírito do Fakespot/"
+        "ReviewMeta). Com base APENAS nestes sinais agregados (nota, volume, distribuição "
+        "por estrelas, recência) — NUNCA no texto das reviews — estima a probabilidade de "
+        "as reviews serem autênticas. Sinais de alerta: distribuição muito polarizada (só "
+        "5★), volume anómalo, picos recentes. Responde só JSON "
+        '{"score": 0..1, "label": "alta|média|baixa"}.\n\nSinais: '
+        + json.dumps(signals, ensure_ascii=False)
+    )
+    try:
+        msg = client.messages.create(
+            model=_model(), max_tokens=120, messages=[{"role": "user", "content": prompt}]
+        )
+        text = "".join(b.text for b in msg.content if b.type == "text")
+        match = re.search(r"\{.*\}", text, re.S)
+        if not match:
+            return None
+        data = json.loads(match.group(0))
+        score = max(0.0, min(1.0, float(data["score"])))
+        return score, str(data.get("label") or "")
+    except Exception:
+        return None
+
+
+def review_themes_summary(theme_tokens: list[tuple[str, str]]) -> tuple[list[dict], str] | None:
+    """A partir de temas JÁ DERIVADOS (pros/cons/keywords — não do texto), agrupa em
+    review_themes (tema, sentimento, frequência) + resumo próprio PT-PT. None se IA off."""
+    client = _client()
+    if client is None or not theme_tokens:
+        return None
+    listed = "; ".join(f"{t} ({pol})" for t, pol in theme_tokens[:24])
+    prompt = (
+        "És redator do DECIFRA. A partir destes TEMAS já derivados (pros/cons; NÃO é o texto "
+        "das reviews), agrupa em 3 a 6 temas concisos e escreve um resumo PRÓPRIO de 1-2 frases "
+        "(português de Portugal), sem inventar e sem copiar frases. Responde só JSON: "
+        '{"themes": [{"theme": "", "polarity": "positivo|negativo|misto", "frequency": int}], '
+        '"summary": ""}.\n\nTemas: ' + listed
+    )
+    try:
+        msg = client.messages.create(
+            model=_model(), max_tokens=400, messages=[{"role": "user", "content": prompt}]
+        )
+        text = "".join(b.text for b in msg.content if b.type == "text")
+        match = re.search(r"\{.*\}", text, re.S)
+        if not match:
+            return None
+        data = json.loads(match.group(0))
+        themes = [
+            {
+                "theme": str(t.get("theme", "")).strip()[:120],
+                "polarity": t.get("polarity", "misto"),
+                "frequency": int(t.get("frequency") or 1),
+            }
+            for t in (data.get("themes") or [])
+            if t.get("theme")
+        ]
+        return themes, str(data.get("summary") or "")
+    except Exception:
+        return None

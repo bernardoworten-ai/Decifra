@@ -435,6 +435,91 @@ def score_recompute_year(period_key: str) -> RunResult:
     raise NotImplementedError("Recompute anual.")
 
 
-def review_refresh() -> RunResult:
-    """Cron por popularidade: re-busca agregados de reviews (nunca o texto)."""
-    raise NotImplementedError("Ligar fontes de review (APIs oficiais + derivados).")
+def review_refresh(
+    slug: str,
+    url: str | None = None,
+    source_name: str | None = None,
+    settings: Settings | None = None,
+    use_ai: bool = True,
+) -> RunResult:
+    """Reviews por loja (§5): obtém MÉTRICAS públicas (nota, volume, distribuição,
+    recência) + temas derivados (pros/cons) + link — NUNCA o texto. Deteta
+    autenticidade (IA), gera temas + resumo próprio (IA) e calcula rating_adjusted."""
+    from .sources.reviews import DataForSeoReviewsConnector, JsonLdReviewsConnector
+
+    settings = settings or Settings.from_env()
+    conn = db.connect(settings.database_url)
+    try:
+        run_id = db.start_run(conn, None, "review_refresh")
+        product = db.product_by_slug(conn, slug)
+        if not product:
+            db.finish_run(conn, run_id, "error", 0, f"produto '{slug}' não encontrado")
+            return RunResult("error", 0, notes=f"produto '{slug}' não encontrado")
+        product_id, name = product
+
+        # --url força JSON-LD (página pública); senão tenta DataForSEO se configurado.
+        if url:
+            metrics = JsonLdReviewsConnector(url, source_name).fetch_metrics()
+        elif settings.dataforseo_login and settings.dataforseo_password:
+            metrics = DataForSeoReviewsConnector(
+                settings.dataforseo_login, settings.dataforseo_password
+            ).fetch_metrics(name, source_name or "google")
+        else:
+            db.finish_run(conn, run_id, "partial", 0, "sem fonte de reviews (dá --url ou creds DataForSEO)")
+            return RunResult("partial", 0, notes="sem fonte de reviews configurada.")
+
+        if not metrics:
+            db.finish_run(conn, run_id, "partial", 0, "sem métricas (robots/ToS ou página sem dados)")
+            return RunResult("partial", 0, notes="sem métricas de reviews (robots/ToS ou página sem dados).")
+
+        source_id = db.ensure_source(conn, metrics.source_name, "reviews", metrics.source_url, metrics.trust_weight)
+        dist = metrics.distribution or {}
+        total = sum(dist.values()) or metrics.review_count or 0
+        signals = {
+            "rating": metrics.rating,
+            "review_count": metrics.review_count,
+            "distribution": dist,
+            "last_review_at": metrics.last_review_at,
+            "share_5star": round(dist.get("5", 0) / total, 2) if total else None,
+            "share_1_2star": round((dist.get("1", 0) + dist.get("2", 0)) / total, 2) if total else None,
+        }
+        # Auditoria: guardamos só as MÉTRICAS (nunca texto).
+        db.record_source_record(
+            conn, source_id,
+            {**signals, "theme_tokens": len(metrics.theme_tokens)}, None, name, product_id,
+        )
+
+        auth = ai.review_authenticity(signals) if use_ai else None
+        authenticity_score = auth[0] if auth else None
+
+        ts = ai.review_themes_summary(metrics.theme_tokens) if use_ai else None
+        if ts:
+            themes, summary = ts
+        else:  # fallback determinístico: usa os temas derivados tal como vêm
+            themes = [{"theme": t, "polarity": pol, "frequency": 1} for t, pol in metrics.theme_tokens]
+            summary = None
+
+        rating_adjusted = scoring.adjusted_rating(metrics.rating, authenticity_score)
+
+        db.upsert_reviews_aggregate(
+            conn, product_id, source_id,
+            rating_raw=metrics.rating,
+            rating_adjusted=rating_adjusted,
+            review_count=metrics.review_count,
+            distribution=dist or None,
+            authenticity_score=authenticity_score,
+            sentiment_summary=summary,
+            source_url=metrics.source_url,
+        )
+        if themes:
+            db.replace_review_themes(conn, product_id, themes)
+
+        cache.invalidate_product(slug)
+        notes = (
+            f"{metrics.source_name}: nota {metrics.rating} ({metrics.review_count}), "
+            f"ajustada {rating_adjusted}, autenticidade {authenticity_score}, {len(themes)} temas"
+        )
+        db.finish_run(conn, run_id, "ok", metrics.review_count, notes)
+        return RunResult("ok", metrics.review_count, notes=notes)
+    finally:
+        conn.close()

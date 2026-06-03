@@ -112,3 +112,14 @@ def value_scores(items: list[tuple[str, float | None, float | None]]) -> dict[st
     for pid, r in ratios.items():
         out[pid] = 75.0 if hi == lo else round(50.0 + (r - lo) / (hi - lo) * 50.0, 1)
     return out
+
+
+def adjusted_rating(raw: float | None, authenticity: float | None) -> float | None:
+    """Nota ajustada por autenticidade (estilo ReviewMeta): baixa autenticidade
+    puxa a nota para o neutro (3,0). Sem autenticidade ⇒ devolve a nota crua."""
+    if raw is None:
+        return None
+    if authenticity is None:
+        return round(raw, 2)
+    factor = 0.7 + 0.3 * clamp01(authenticity)
+    return round(max(0.0, min(5.0, 3.0 + (raw - 3.0) * factor)), 2)

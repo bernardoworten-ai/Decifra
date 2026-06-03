@@ -464,3 +464,61 @@ def ranking_exists(
         ).fetchone()
         is not None
     )
+
+
+# ── Reviews (só métricas derivadas — NUNCA texto) ────────────────────────────
+def product_by_slug(conn: psycopg.Connection, slug: str) -> tuple[str, str] | None:
+    row = conn.execute(
+        "SELECT id, canonical_name FROM products WHERE slug = %s", (slug,)
+    ).fetchone()
+    return (str(row[0]), row[1]) if row else None
+
+
+def upsert_reviews_aggregate(
+    conn: psycopg.Connection,
+    product_id: str,
+    source_id: str,
+    *,
+    rating_raw: float | None,
+    rating_adjusted: float | None,
+    review_count: int,
+    distribution: dict | None,
+    authenticity_score: float | None,
+    sentiment_summary: str | None,
+    source_url: str | None,
+) -> None:
+    """Grava SÓ métricas + resumo próprio + link. Sem texto de reviews (§5)."""
+    conn.execute(
+        """
+        INSERT INTO reviews_aggregate
+            (product_id, source_id, rating_raw, rating_adjusted, review_count, distribution,
+             authenticity_score, sentiment_summary, source_url, fetched_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+        ON CONFLICT (product_id, source_id) DO UPDATE SET
+            rating_raw = EXCLUDED.rating_raw, rating_adjusted = EXCLUDED.rating_adjusted,
+            review_count = EXCLUDED.review_count, distribution = EXCLUDED.distribution,
+            authenticity_score = EXCLUDED.authenticity_score,
+            sentiment_summary = EXCLUDED.sentiment_summary, source_url = EXCLUDED.source_url,
+            fetched_at = now()
+        """,
+        (
+            product_id,
+            source_id,
+            rating_raw,
+            rating_adjusted,
+            review_count,
+            Jsonb(distribution) if distribution is not None else None,
+            authenticity_score,
+            sentiment_summary,
+            source_url,
+        ),
+    )
+
+
+def replace_review_themes(conn: psycopg.Connection, product_id: str, themes: list[dict]) -> None:
+    conn.execute("DELETE FROM review_themes WHERE product_id = %s", (product_id,))
+    for t in themes:
+        conn.execute(
+            "INSERT INTO review_themes (product_id, theme, polarity, frequency) VALUES (%s, %s, %s, %s)",
+            (product_id, t["theme"], t.get("polarity", "misto"), int(t.get("frequency") or 1)),
+        )
