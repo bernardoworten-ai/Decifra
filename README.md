@@ -74,8 +74,31 @@ specs explicadas com fonte, preço multi-loja, reviews por loja, DECIFRA Score).
 - **Fronteira legal das reviews** — guardamos agregados, distribuição,
   autenticidade e resumo próprio; **nunca o texto**. Ligamos à fonte.
 
+## Jobs agendados (§3) & observabilidade (§7)
+
+Os crons correm os **workers Python** via **GitHub Actions**
+([`.github/workflows/scheduled-jobs.yml`](.github/workflows/scheduled-jobs.yml)),
+cada um disparável à mão (**Run workflow**). O **preço live nunca está em cron** (§10)
+— é só on-demand pelo botão. Jobs idempotentes; cada execução grava em `ingestion_runs`
+(e falhas ficam com `status='error'`).
+
+| Job | Quando | Comando |
+|---|---|---|
+| Feed batch (ofertas) | diário | `feed-batch` |
+| Score recompute (mês) | dia 10 | `score-recompute --period month` |
+| Score recompute (ano) | 1 de janeiro | `score-recompute --period year` |
+| Review refresh (popularidade) | semanal | `review-refresh-popular` |
+
+**Secrets** a criar em *GitHub → Settings → Secrets and variables → Actions*:
+`DATABASE_URL` (obrigatório); `ICECAT_USERNAME` (recomendado, ex.: `GCode420`);
+opcionais `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DATAFORSEO_LOGIN`,
+`DATAFORSEO_PASSWORD`, `AWIN_FEED_URL`, `SENTRY_DSN`.
+
+**Observabilidade:** Sentry (web via `instrumentation.ts`; workers via
+`observability.py`) + logs estruturados (JSON) por execução. Tudo *graceful*:
+sem `SENTRY_DSN` é no-op. A frescura ("verificado a …") aparece na ficha.
+
 ## Próximos passos
 
-Ligar fontes reais (workers): EAN APIs, Open Icecat, feeds Awin, fontes de
-review. Depois a camada curada (rankings) e a integração Awin (publisher, deep
-links, preço live). Ver blueprint §8 e §11.
+Camada curada e operação contínua: afinar os rankings, ligar mais fontes de review
+(DataForSEO/Trustpilot) e a integração Awin (publisher, deep links). Ver blueprint §8 e §11.

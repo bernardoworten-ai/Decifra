@@ -7,7 +7,8 @@ import { PriceTable } from "@/components/PriceTable";
 import { ReviewsBlock } from "@/components/ReviewsBlock";
 import { ScorePanel } from "@/components/ScorePanel";
 import { SpecsTable } from "@/components/SpecsTable";
-import { getProductDetail } from "@/lib/queries";
+import { getDataFreshness, getProductDetail } from "@/lib/queries";
+import { freshness } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function ProductPage({ params }: PageProps) {
   const { product, attributeMeta } = data;
   const sourceCount = distinctSources(data);
   const ean = product.identifiers.find((i) => i.idType === "ean")?.idValue;
+  const dataFreshness = await getDataFreshness();
 
   // Migalhas: setor > categoria > aparelho.
   const crumbs = [
@@ -107,6 +109,12 @@ export default async function ProductPage({ params }: PageProps) {
           </dl>
         </div>
       </header>
+
+      {dataFreshness && (
+        <p className="-mt-2 mb-4 text-xs text-slate-400">
+          Dados {freshness(dataFreshness)} (pipelines automáticas).
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

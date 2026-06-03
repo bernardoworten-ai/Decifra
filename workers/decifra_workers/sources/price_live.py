@@ -176,6 +176,9 @@ class PriceLiveConnector:
                 tasks = resp.json().get("tasks") or []
                 result = (tasks[0].get("result") or [{}])[0] if tasks else {}
                 return parse_dataforseo(result)
-        except Exception:
+        except Exception as exc:
+            from .. import observability
+
+            observability.capture(exc, source=self.provider, kind="price_live", query=query)
             return []  # graceful: nunca quebra o pedido on-demand
         return []

@@ -62,6 +62,9 @@ def finish_run(
         "UPDATE ingestion_runs SET status=%s, items=%s, notes=%s, finished_at=now() WHERE id=%s",
         (status, items, notes, run_id),
     )
+    from . import observability  # log estruturado de cada execução (§7)
+
+    observability.jlog("ingestion_run", run_id=run_id, status=status, items=items, notes=notes)
 
 
 def record_source_record(
@@ -513,6 +516,24 @@ def upsert_reviews_aggregate(
             source_url,
         ),
     )
+
+
+def popular_products(conn: psycopg.Connection, limit: int = 20) -> list[str]:
+    """Slugs por popularidade (volume de reviews + favoritos) — para o review refresh."""
+    rows = conn.execute(
+        """
+        SELECT p.slug,
+               coalesce(sum(ra.review_count), 0) + 50 * count(DISTINCT si.id) AS pop
+        FROM products p
+        LEFT JOIN reviews_aggregate ra ON ra.product_id = p.id
+        LEFT JOIN saved_items si ON si.product_id = p.id
+        GROUP BY p.slug
+        ORDER BY pop DESC
+        LIMIT %s
+        """,
+        (limit,),
+    ).fetchall()
+    return [r[0] for r in rows]
 
 
 def replace_review_themes(conn: psycopg.Connection, product_id: str, themes: list[dict]) -> None:

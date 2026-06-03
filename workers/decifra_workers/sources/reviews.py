@@ -197,7 +197,10 @@ class JsonLdReviewsConnector:
         try:
             resp = httpx.get(self.url, timeout=15, follow_redirects=True, headers={"User-Agent": "DecifraBot"})
             resp.raise_for_status()
-        except Exception:
+        except Exception as exc:
+            from .. import observability
+
+            observability.capture(exc, source=self.source_name, kind="reviews", url=self.url)
             return None
         return parse_jsonld(resp.text, self.url, self.source_name)
 

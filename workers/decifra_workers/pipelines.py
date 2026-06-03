@@ -216,6 +216,26 @@ def consolidate(eans: list[str], settings: Settings | None = None, use_ai: bool 
 
 
 # ── Ainda por implementar (próximas fases) ────────────────────────────────────
+def review_refresh_popular(
+    limit: int = 10, settings: Settings | None = None, use_ai: bool = True
+) -> RunResult:
+    """Cron por popularidade (§3): refresca reviews dos produtos mais populares
+    (volume de reviews + favoritos). Sem fonte para um produto, salta graciosamente."""
+    settings = settings or Settings.from_env()
+    conn = db.connect(settings.database_url)
+    try:
+        slugs = db.popular_products(conn, limit)
+    finally:
+        conn.close()
+
+    ok = 0
+    for slug in slugs:
+        if review_refresh(slug, settings=settings, use_ai=use_ai).status == "ok":
+            ok += 1
+    status = "ok" if (ok or not slugs) else "partial"
+    return RunResult(status, ok, notes=f"{ok}/{len(slugs)} produtos refrescados")
+
+
 def refresh_price(slug: str, settings: Settings | None = None) -> RunResult:
     """Botão "atualizar" (§3): Google Shopping (DataForSEO/Bright Data/SerpApi) →
     atualiza `offers` do produto. SÓ on-demand (nunca batch, §10). Graceful."""

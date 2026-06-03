@@ -5,3 +5,4 @@ pydantic>=2.7         # validação/normalização de payloads das fontes
 python-dotenv>=1.0    # carregar .env
 tenacity>=8.2         # retries com backoff nas APIs externas
 anthropic>=0.40       # IA (explicação/normalização/resumos), sempre ancorada em fontes
+sentry-sdk>=2.0       # observabilidade (§7); só ativo com SENTRY_DSN

@@ -5,7 +5,19 @@
 import "server-only";
 import { asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { categoryAttributes } from "@/db/schema";
+import { categoryAttributes, ingestionRuns } from "@/db/schema";
+
+/** Frescura visível (§3/§7): última execução bem-sucedida das pipelines. */
+export async function getDataFreshness(): Promise<Date | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({ at: ingestionRuns.finishedAt })
+    .from(ingestionRuns)
+    .where(eq(ingestionRuns.status, "ok"))
+    .orderBy(desc(ingestionRuns.finishedAt))
+    .limit(1);
+  return row?.at ?? null;
+}
 
 export type AttributeMeta = {
   label: string;
