@@ -116,7 +116,7 @@ export default async function ProductPage({ params }: PageProps) {
         </div>
         <div className="space-y-6 lg:sticky lg:top-20 lg:self-start">
           <ScorePanel score={product.score} sourceCount={sourceCount} />
-          <PriceTable offers={product.offers} />
+          <PriceTable offers={product.offers} slug={product.slug} />
           <FavoriteBox productId={product.id} />
         </div>
       </div>

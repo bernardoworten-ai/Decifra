@@ -75,6 +75,26 @@ export async function registerProductKey(slug: string, key: string): Promise<voi
   }
 }
 
+// Fallback em memória (single-instance) quando não há Redis.
+const _memRate = new Map<string, number>();
+
+/** Rate-limit best-effort: true se a ação é permitida agora; false se em cooldown. */
+export async function rateLimit(key: string, windowSeconds: number): Promise<boolean> {
+  const c = getClient();
+  if (c) {
+    try {
+      const res = await c.set(key, "1", { nx: true, ex: windowSeconds });
+      return res === "OK";
+    } catch {
+      /* cai para memória */
+    }
+  }
+  const now = Date.now();
+  if (now < (_memRate.get(key) ?? 0)) return false;
+  _memRate.set(key, now + windowSeconds * 1000);
+  return true;
+}
+
 /** Invalida todas as chaves de cache de um produto (preço/score mudaram). */
 export async function invalidateProduct(slug: string): Promise<void> {
   const c = getClient();

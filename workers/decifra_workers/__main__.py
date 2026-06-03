@@ -39,6 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     p_rev.add_argument("--source", default=None, help="nome da fonte (ex.: trustpilot, google)")
     p_rev.add_argument("--no-ai", action="store_true", help="Sem IA (autenticidade/temas)")
 
+    p_price = sub.add_parser("refresh-price", help="Preço live on-demand (§3) — atualiza offers")
+    p_price.add_argument("slug", help="slug do produto")
+
     p_cons = sub.add_parser("consolidate", help="Consolidação real: ingere vários EAN + recompute")
     p_cons.add_argument("eans", nargs="+", help="Um ou mais EAN/UPC")
     p_cons.add_argument("--no-ai", action="store_true", help="Sem IA (resumos/rationale)")
@@ -57,6 +60,8 @@ def main(argv: list[str] | None = None) -> int:
         res = pipelines.check_price_alerts()
     elif args.cmd == "review-refresh":
         res = pipelines.review_refresh(args.slug, url=args.url, source_name=args.source, use_ai=not args.no_ai)
+    elif args.cmd == "refresh-price":
+        res = pipelines.refresh_price(args.slug)
     else:  # pragma: no cover
         parser.error("comando desconhecido")
 

@@ -1,11 +1,12 @@
 import type { ProductDetail } from "@/lib/queries";
 import { formatPrice, freshness } from "@/lib/format";
 import { num } from "@/lib/num";
+import { RefreshPriceButton } from "./RefreshPriceButton";
 
 type Offers = ProductDetail["product"]["offers"];
 
 /** Comparação de preço multi-loja. Realça o melhor preço em stock. */
-export function PriceTable({ offers }: { offers: Offers }) {
+export function PriceTable({ offers, slug }: { offers: Offers; slug: string }) {
   const inStock = offers.filter((o) => o.inStock);
   const cheapestId = inStock.length
     ? inStock.reduce((min, o) => (num(o.price)! < num(min.price)! ? o : min)).id
@@ -15,9 +16,7 @@ export function PriceTable({ offers }: { offers: Offers }) {
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
         <h2 className="font-semibold text-slate-900">Preço nas lojas</h2>
-        <span className="text-xs text-slate-400">
-          via feeds · atualização live por pedido (fase seguinte)
-        </span>
+        <RefreshPriceButton slug={slug} />
       </div>
       <ul className="divide-y divide-slate-100">
         {offers.map((o) => {

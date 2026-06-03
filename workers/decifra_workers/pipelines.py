@@ -216,9 +216,43 @@ def consolidate(eans: list[str], settings: Settings | None = None, use_ai: bool 
 
 
 # ── Ainda por implementar (próximas fases) ────────────────────────────────────
-def refresh_price_live(product_id: str) -> RunResult:
-    """Botão "atualizar": Google Shopping (SerpApi/Bright Data) → `offers`. Pago."""
-    raise NotImplementedError("Ligar SerpApi/Bright Data.")
+def refresh_price(slug: str, settings: Settings | None = None) -> RunResult:
+    """Botão "atualizar" (§3): Google Shopping (DataForSEO/Bright Data/SerpApi) →
+    atualiza `offers` do produto. SÓ on-demand (nunca batch, §10). Graceful."""
+    from .sources.price_live import PriceLiveConnector
+
+    settings = settings or Settings.from_env()
+    conn = db.connect(settings.database_url)
+    try:
+        run_id = db.start_run(conn, None, "price_refresh")
+        product = db.product_by_slug(conn, slug)
+        if not product:
+            db.finish_run(conn, run_id, "error", 0, f"produto '{slug}' não encontrado")
+            return RunResult("error", 0, notes=f"produto '{slug}' não encontrado")
+        product_id, name = product
+
+        connector = PriceLiveConnector(settings)
+        if not connector.configured():
+            db.finish_run(conn, run_id, "partial", 0, "preço live não configurado (faltam credenciais)")
+            return RunResult("partial", 0, notes="preço live não configurado (faltam credenciais).")
+
+        ean_row = conn.execute(
+            "SELECT id_value FROM product_identifiers WHERE product_id=%s AND id_type='ean' LIMIT 1",
+            (product_id,),
+        ).fetchone()
+        offers = connector.fetch(ean_row[0] if ean_row else None, name)
+
+        source_id = db.ensure_source(conn, connector.source_name, "offers", None, 0.6)
+        for offer in offers:
+            store_id = db.ensure_store(conn, offer.store_name)
+            db.upsert_offer(conn, product_id, store_id, source_id, offer)
+
+        cache.invalidate_product(slug)
+        notes = f"{connector.source_name}: {len(offers)} ofertas atualizadas para {slug}"
+        db.finish_run(conn, run_id, "ok", len(offers), notes)
+        return RunResult("ok", len(offers), notes=notes)
+    finally:
+        conn.close()
 
 
 # Critérios de ranking (cada um é só um ordenamento) → rótulo PT-PT.

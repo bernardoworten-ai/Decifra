@@ -21,6 +21,7 @@ class Settings:
     awin_feed_url: str | None = None
     dataforseo_login: str | None = None
     dataforseo_password: str | None = None
+    brightdata_token: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -38,4 +39,5 @@ class Settings:
             awin_feed_url=os.environ.get("AWIN_FEED_URL"),
             dataforseo_login=os.environ.get("DATAFORSEO_LOGIN"),
             dataforseo_password=os.environ.get("DATAFORSEO_PASSWORD"),
+            brightdata_token=os.environ.get("BRIGHTDATA_TOKEN"),
         )
