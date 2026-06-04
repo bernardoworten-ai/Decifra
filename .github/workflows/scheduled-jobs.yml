@@ -46,7 +46,13 @@ jobs:
           cache: pip
           cache-dependency-path: workers/requirements.txt
       - run: pip install -r requirements.txt
-      - run: python -m decifra_workers feed-batch
+      - name: feed-batch
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::DATABASE_URL não configurado — job ignorado. Define os secrets para ativar os crons."
+            exit 0
+          fi
+          python -m decifra_workers feed-batch
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           AWIN_FEED_URL: ${{ secrets.AWIN_FEED_URL }}
@@ -63,7 +69,13 @@ jobs:
           cache: pip
           cache-dependency-path: workers/requirements.txt
       - run: pip install -r requirements.txt
-      - run: python -m decifra_workers score-recompute --period month
+      - name: score-recompute-month
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::DATABASE_URL não configurado — job ignorado."
+            exit 0
+          fi
+          python -m decifra_workers score-recompute --period month
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -81,7 +93,13 @@ jobs:
           cache: pip
           cache-dependency-path: workers/requirements.txt
       - run: pip install -r requirements.txt
-      - run: python -m decifra_workers score-recompute --period year
+      - name: score-recompute-year
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::DATABASE_URL não configurado — job ignorado."
+            exit 0
+          fi
+          python -m decifra_workers score-recompute --period year
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -99,7 +117,13 @@ jobs:
           cache: pip
           cache-dependency-path: workers/requirements.txt
       - run: pip install -r requirements.txt
-      - run: python -m decifra_workers review-refresh-popular --limit 30
+      - name: review-refresh-popular
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::DATABASE_URL não configurado — job ignorado."
+            exit 0
+          fi
+          python -m decifra_workers review-refresh-popular --limit 30
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}

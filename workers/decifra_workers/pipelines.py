@@ -91,7 +91,8 @@ def feed_batch(settings: Settings | None = None, limit: int | None = None) -> Ru
     settings = settings or Settings.from_env()
     awin = AwinFeedConnector(feed_url=settings.awin_feed_url)
     if not awin.configured():
-        return RunResult("error", 0, notes="AWIN_FEED_URL não configurado — feed_batch ignorado.")
+        # Não configurado ≠ falha: é um skip limpo (não mete o cron a vermelho).
+        return RunResult("partial", 0, notes="AWIN_FEED_URL não configurado — feed_batch ignorado.")
 
     conn = db.connect(settings.database_url)
     try:

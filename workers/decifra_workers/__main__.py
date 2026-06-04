@@ -104,7 +104,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     observability.jlog("job_done", command=args.cmd, status=res.status, items=res.items)
     print(f"[{res.status}] {res.notes}")
-    return 0 if res.status == "ok" else 1
+    # 'partial' = correu mas não havia nada a fazer / fonte não configurada → não é falha.
+    return 0 if res.status in ("ok", "partial") else 1
 
 
 if __name__ == "__main__":
