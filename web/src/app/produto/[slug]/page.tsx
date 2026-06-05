@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Compatibility } from "@/components/Compatibility";
 import { FavoriteBox } from "@/components/FavoriteBox";
 import { PriceTable } from "@/components/PriceTable";
+import { ProductImage } from "@/components/ProductImage";
 import { ReviewsBlock } from "@/components/ReviewsBlock";
 import { ScorePanel } from "@/components/ScorePanel";
 import { SpecsTable } from "@/components/SpecsTable";
@@ -69,9 +70,8 @@ export default async function ProductPage({ params }: PageProps) {
       {/* Cabeçalho */}
       <header className="mb-6 grid grid-cols-1 gap-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-[220px_1fr]">
         <div className="aspect-square overflow-hidden rounded-xl bg-slate-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={product.imageUrl ?? ""}
+          <ProductImage
+            src={product.imageUrl}
             alt={product.canonicalName ?? "Produto"}
             className="h-full w-full object-cover"
           />

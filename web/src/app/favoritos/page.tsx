@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProductImage } from "@/components/ProductImage";
 import { removeFavorite, setEmail, setPriceAlert } from "@/app/_actions/favorites";
 import { currentUserId, getSavedItems, getUserEmail } from "@/lib/favorites";
 import { formatPrice } from "@/lib/format";
@@ -66,9 +67,8 @@ export default async function FavoritesPage() {
                   className="flex flex-wrap gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={it.imageUrl ?? ""}
+                    <ProductImage
+                      src={it.imageUrl}
                       alt={it.canonicalName ?? "Produto"}
                       className="h-full w-full object-cover"
                     />

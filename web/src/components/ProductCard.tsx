@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProductImage } from "@/components/ProductImage";
 import type { getProductList } from "@/lib/queries";
 import { formatPrice } from "@/lib/format";
 import { num } from "@/lib/num";
@@ -16,9 +17,8 @@ export function ProductCard({ product }: { product: ListProduct }) {
       className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md"
     >
       <div className="relative aspect-square overflow-hidden bg-slate-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={product.imageUrl ?? ""}
+        <ProductImage
+          src={product.imageUrl}
           alt={product.canonicalName ?? "Produto"}
           className="h-full w-full object-cover transition-transform group-hover:scale-105"
         />

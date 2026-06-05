@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProductImage } from "@/components/ProductImage";
 import type { FinderCandidate } from "@/lib/finder";
 
 /** Cartão de candidato do finder: produto + score + porquê do match. */
@@ -9,9 +10,8 @@ export function FinderResult({ candidate, rank }: { candidate: FinderCandidate; 
       className="group flex gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
     >
       <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={candidate.imageUrl ?? ""}
+        <ProductImage
+          src={candidate.imageUrl}
           alt={candidate.canonicalName ?? "Produto"}
           className="h-full w-full object-cover transition-transform group-hover:scale-105"
         />

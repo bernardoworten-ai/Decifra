@@ -1,14 +1,14 @@
 import { test, expect } from "@playwright/test";
 
 test("homepage carrega e lista produtos", async ({ page }) => {
-  const res = await page.goto("/");
+  const res = await page.goto("/", { waitUntil: "domcontentloaded" });
   expect(res?.ok()).toBeTruthy();
   await expect(page.locator("h1")).toBeVisible();
   await expect(page.locator('a[href^="/produto/"]').first()).toBeVisible();
 });
 
 test("ficha renderiza DECIFRA Score e proveniência", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.locator('a[href^="/produto/"]').first().click();
   await expect(page).toHaveURL(/\/produto\//);
   await expect(page.locator("h1")).toBeVisible();
