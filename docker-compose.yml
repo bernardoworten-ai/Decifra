@@ -1,0 +1,23 @@
+# Postgres local com pgvector para desenvolvimento.
+# Em produção: Supabase ou Neon (Postgres geridos, ambos com pgvector).
+#   docker compose up -d db
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: decifra-db
+    environment:
+      POSTGRES_USER: decifra
+      POSTGRES_PASSWORD: decifra
+      POSTGRES_DB: decifra
+    ports:
+      - "5432:5432"
+    volumes:
+      - decifra-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decifra -d decifra"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  decifra-pgdata:
