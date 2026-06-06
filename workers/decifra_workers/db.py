@@ -93,13 +93,21 @@ def find_product_by_ean(conn: psycopg.Connection, ean: str) -> str | None:
     return str(row[0]) if row else None
 
 
-def fuzzy_match_product(conn: psycopg.Connection, name: str, threshold: float) -> tuple[str, float] | None:
-    """Melhor candidato por similaridade trigram em marca+modelo (pg_trgm)."""
+def fuzzy_match_product(
+    conn: psycopg.Connection, name: str, threshold: float
+) -> tuple[str, float, str | None] | None:
+    """Melhor candidato por similaridade trigram em marca+modelo (pg_trgm).
+
+    Devolve (product_id, similaridade, modelo_do_candidato) ou None. O modelo do
+    candidato é devolvido para o chamador exigir igualdade do token discriminante
+    antes de fundir (evita unir modelos adjacentes — XM4/XM5 — só por terem a
+    string global parecida).
+    """
     if not name.strip():
         return None
     row = conn.execute(
         """
-        SELECT id, similarity(coalesce(brand,'') || ' ' || coalesce(model,''), %s) AS sim
+        SELECT id, similarity(coalesce(brand,'') || ' ' || coalesce(model,''), %s) AS sim, model
         FROM products
         WHERE (coalesce(brand,'') || ' ' || coalesce(model,'')) %% %s
         ORDER BY sim DESC
@@ -108,7 +116,7 @@ def fuzzy_match_product(conn: psycopg.Connection, name: str, threshold: float) -
         (name, name),
     ).fetchone()
     if row and row[1] is not None and float(row[1]) >= threshold:
-        return str(row[0]), float(row[1])
+        return str(row[0]), float(row[1]), row[2]
     return None
 
 
@@ -143,6 +151,25 @@ def create_product(
         (slug, brand, model, canonical, summary, image_url, match_confidence, needs_review),
     ).fetchone()
     return str(row[0])
+
+
+def flag_needs_review(
+    conn: psycopg.Connection, product_id: str, confidence: float | None = None
+) -> None:
+    """Marca um produto para revisão humana (ex.: merge fuzzy de baixa confiança).
+
+    Se `confidence` for indicado, baixa `match_confidence` para esse valor quando
+    for menor que o atual (preserva o pior caso de confiança observado).
+    """
+    if confidence is None:
+        conn.execute("UPDATE products SET needs_review = true WHERE id = %s", (product_id,))
+    else:
+        conn.execute(
+            "UPDATE products SET needs_review = true, "
+            "match_confidence = LEAST(coalesce(match_confidence, 1), %s) "
+            "WHERE id = %s",
+            (confidence, product_id),
+        )
 
 
 def update_product_summary(conn: psycopg.Connection, product_id: str, summary: str) -> None:
